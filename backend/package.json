@@ -1,0 +1,18 @@
+{
+  "name": "kungfu-takeaway-backend",
+  "version": "1.0.0",
+  "description": "Backend for Kungfu Takeaway ordering system",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "multer": "1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+} 
