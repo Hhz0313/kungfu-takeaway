@@ -288,46 +288,37 @@ onMounted(() => {
 
 // Basic Add to Cart functionality (will be expanded)
 const addToCart = async (item, type) => {
-  const DUMMY_USER_ID = "1";
-
-  // If it's a dish and has flavors, navigate to detail page for selection
-  if (type === 'dish' && item.flavors && item.flavors.length > 0) {
+  // 如果是菜品且有口味，跳转到详情页
+  if (
+    type === 'dish' &&
+    Array.isArray(item.flavors) &&
+    item.flavors.length > 0
+  ) {
+    console.log('菜品有口味，跳转到详情页:', item);
     router.push({ name: 'DishDetailPage', params: { id: item.id } });
-    return; // Stop further execution for direct add
+    return;
   }
 
-  const payload = {
-    user_id: DUMMY_USER_ID,
-    item_id: item.id,
-    item_type: type,
-    quantity: 1,
-    selected_flavors: [], // For direct add of combos or no-flavor dishes, no flavors selected here
-  };
-
+  // 否则直接加入购物车
   try {
-    // Clear previous messages
-    cartSuccessMessage.value = '';
-    itemErrorMessage.value = ''; // Could be a different error ref for cart errors
+    const payload = {
+      item_id: item.id,
+      item_type: type,
+      quantity: 1,
+      selected_flavors: null
+    };
 
     const response = await axios.post(`${API_BASE_URL}/cart`, payload);
     if (response.data && response.data.code === 0) {
-      // Success! Show a temporary message or update a cart icon/count (not implemented here)
       console.log('Added to cart:', response.data.data);
-      alert(`${item.name} 已添加到购物车!`); // Simple alert for now
-      // cartSuccessMessage.value = `${item.name} 已添加到购物车!`;
-      // setTimeout(() => cartSuccessMessage.value = '', 3000);
+      alert(`${item.name} 已添加到购物车!`);
     } else {
       throw new Error(response.data.message || '添加到购物车失败');
     }
   } catch (error) {
     console.error('Error adding to cart:', error);
     alert(`添加 ${item.name} 到购物车失败: ${error.response?.data?.message || error.message}`);
-    // itemErrorMessage.value = `添加 ${item.name} 到购物车失败: ${error.response?.data?.message || error.message}`;
   }
-  // TODO: Navigate to dish detail page for customization (flavors, quantity)
-  // Or open a modal for quick add options
-  // console.log('Adding to cart:', item, type);
-  // alert(`${item.name} (${type}) added to cart (simulated)`);
 };
 
 </script>

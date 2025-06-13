@@ -1,75 +1,53 @@
-const { readData, writeData, generateId } = require('../utils/db');
+const db = require('../utils/db');
 const { successResponse, errorResponse } = require('../utils/responseUtil');
 
-const CART_MODEL_NAME = 'cartItems';
-const DISH_MODEL_NAME = 'dishes';
-const COMBO_MODEL_NAME = 'combos';
-
-// 模拟登录用户 (后续替换为真实认证)
-const DUMMY_USER_ID = "1";
+// 测试用固定用户ID
+const TEST_USER_ID = "1";
 
 /**
  * @desc    获取当前用户的购物车详情
  * @route   GET /api/cart
  */
 const getCart = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = TEST_USER_ID;
+  console.log('[cartController] getCart: Starting with userId:', userId);
   try {
-    let cartItems = await readData(CART_MODEL_NAME);
-    const userCartItems = cartItems.filter(item => item.user_id === userId);
-
-    const dishes = await readData(DISH_MODEL_NAME);
-    const combos = await readData(COMBO_MODEL_NAME);
-
+    console.log('[cartController] getCart: Fetching cart items from database...');
+    const cartItems = await db.getCartItems(userId);
+    console.log('[cartController] getCart: Raw cart items from database:', cartItems);
+    
     let totalAmount = 0;
-    const processedCartItems = userCartItems.map(item => {
-      let itemDetails = null;
-      let unitPrice = 0;
-      let itemName = '商品已下架或不存在';
-      let itemImageUrl = null;
-      let isAvailable = false;
+    const processedCartItems = cartItems.map(item => {
+      const isDish = !!item.dish_id;
+      const itemName = isDish ? item.dish_name : item.combo_name;
+      const unitPrice = parseFloat(isDish ? item.dish_price : item.combo_price) || 0;
+      const itemImageUrl = isDish ? item.dish_image : item.combo_image;
+      const isAvailable = true; // 因为我们在查询时已经过滤了不可用的商品
 
-      if (item.item_type === 'dish') {
-        itemDetails = dishes.find(d => d.id === item.item_id);
-        if (itemDetails && itemDetails.is_available) {
-            unitPrice = itemDetails.price;
-            itemName = itemDetails.name;
-            itemImageUrl = itemDetails.image_url;
-            isAvailable = true;
-        }
-      } else if (item.item_type === 'combo') {
-        itemDetails = combos.find(c => c.id === item.item_id);
-        if (itemDetails && itemDetails.is_available) {
-            unitPrice = itemDetails.price;
-            itemName = itemDetails.name;
-            itemImageUrl = itemDetails.image_url;
-            isAvailable = true;
-        }
-      }
-      
-      // 只有商品有效才计算价格
-      const subTotal = isAvailable ? unitPrice * item.quantity : 0;
-      if(isAvailable) totalAmount += subTotal;
+      const subTotal = unitPrice * item.quantity;
+      totalAmount += subTotal;
 
       return {
         cart_item_id: item.id,
-        ...item,
-        item_name: itemName,
+        item_id: item.dish_id || item.combo_id,
+        item_type: item.dish_id ? 'dish' : 'combo',
+        quantity: parseInt(item.quantity) || 0,
+        selected_flavors: item.selected_flavors ? JSON.parse(item.selected_flavors) : null,
+        item_name: itemName || '未知商品',
         unit_price: unitPrice,
-        item_image_url: itemImageUrl,
+        item_image_url: itemImageUrl || '',
         sub_total: subTotal,
-        is_available: isAvailable // 添加一个字段表示该购物车项对应的商品当前是否有效
+        is_available: isAvailable
       };
     });
-    
-    // 过滤掉那些实际已不可用的商品项，确保购物车中只显示可购买的
-    const finalCartItems = processedCartItems.filter(item => item.is_available);
-    // 重新计算总价，因为过滤后可能总价会变
-    totalAmount = finalCartItems.reduce((acc, item) => acc + item.sub_total, 0);
 
-    successResponse(res, { items: finalCartItems, total_amount: parseFloat(totalAmount.toFixed(2)) });
+    console.log('[cartController] getCart: Processed cart items:', processedCartItems);
+    console.log('[cartController] getCart: Total amount:', totalAmount);
+
+    successResponse(res, { items: processedCartItems, total_amount: parseFloat(totalAmount.toFixed(2)) });
   } catch (error) {
-    console.error('获取购物车失败:', error.message);
+    console.error('[cartController] getCart: Error occurred:', error);
+    console.error('[cartController] getCart: Error stack:', error.stack);
     errorResponse(res, 500, '服务器错误: 获取购物车失败');
   }
 };
@@ -77,11 +55,11 @@ const getCart = async (req, res) => {
 /**
  * @desc    向购物车添加商品 (菜品或套餐)
  * @route   POST /api/cart
- * @body    { item_id, item_type ('dish' or 'combo'), quantity, flavor (optional) }
+ * @body    { item_id, item_type ('dish' or 'combo'), quantity, selected_flavors (optional) }
  */
 const addItemToCart = async (req, res) => {
-  const userId = DUMMY_USER_ID;
-  const { item_id, item_type, quantity, flavor } = req.body;
+  const userId = TEST_USER_ID;
+  const { item_id, item_type, quantity, selected_flavors } = req.body;
 
   if (!item_id || !item_type || !quantity || parseInt(quantity) < 1) {
     return errorResponse(res, 400, '商品ID、类型和数量为必填项，且数量必须大于0');
@@ -93,59 +71,46 @@ const addItemToCart = async (req, res) => {
   try {
     let itemExistsAndAvailable = false;
     if (item_type === 'dish') {
-      const dishes = await readData(DISH_MODEL_NAME);
-      const dish = dishes.find(d => d.id === item_id && d.is_available);
-      if (dish) itemExistsAndAvailable = true;
+      const dish = await db.getDishById(item_id);
+      if (dish && dish.is_available) itemExistsAndAvailable = true;
     } else {
-      const combos = await readData(COMBO_MODEL_NAME);
-      const combo = combos.find(c => c.id === item_id && c.is_available);
-      if (combo) itemExistsAndAvailable = true;
+      const combo = await db.getComboById(item_id);
+      if (combo && combo.is_enabled) itemExistsAndAvailable = true;
     }
 
     if (!itemExistsAndAvailable) {
       return errorResponse(res, 404, '商品不存在或已下架');
     }
 
-    let cartItems = await readData(CART_MODEL_NAME);
-    let existingCartItemIndex = -1;
+    const cartItems = await db.getCartItems(userId);
+    let existingCartItem = null;
 
     if (item_type === 'dish') {
-        existingCartItemIndex = cartItems.findIndex(item => 
-            item.user_id === userId && 
-            item.item_id === item_id && 
-            item.item_type === item_type &&
-            ( (flavor && item.flavor === flavor) || (!flavor && (!item.flavor || item.flavor === '')) )
-        );
-    } else { // 套餐不考虑口味
-        existingCartItemIndex = cartItems.findIndex(item => 
-            item.user_id === userId && 
-            item.item_id === item_id && 
-            item.item_type === item_type
-        );
+      existingCartItem = cartItems.find(item => 
+        item.dish_id === item_id && 
+        item.selected_flavors === (selected_flavors ? JSON.stringify(selected_flavors) : null)
+      );
+    } else {
+      existingCartItem = cartItems.find(item => item.combo_id === item_id);
     }
 
-    if (existingCartItemIndex > -1) {
-      const newQuantity = cartItems[existingCartItemIndex].quantity + parseInt(quantity);
-      cartItems[existingCartItemIndex].quantity = newQuantity;
-      cartItems[existingCartItemIndex].added_at = new Date().toISOString();
-      await writeData(CART_MODEL_NAME, cartItems);
-      successResponse(res, { cart_item_id: cartItems[existingCartItemIndex].id, quantity: newQuantity }, '商品数量已更新');
+    if (existingCartItem) {
+      const newQuantity = existingCartItem.quantity + parseInt(quantity);
+      await db.updateCartItem(existingCartItem.id, { quantity: newQuantity });
+      successResponse(res, { cart_item_id: existingCartItem.id, quantity: newQuantity }, '商品数量已更新');
     } else {
       const newCartItem = {
-        id: generateId(),
         user_id: userId,
-        item_id,
-        item_type,
+        dish_id: item_type === 'dish' ? item_id : null,
+        combo_id: item_type === 'combo' ? item_id : null,
         quantity: parseInt(quantity),
-        flavor: (item_type === 'dish' && flavor) ? flavor : null,
-        added_at: new Date().toISOString(),
+        selected_flavors: selected_flavors ? JSON.stringify(selected_flavors) : null
       };
-      cartItems.push(newCartItem);
-      await writeData(CART_MODEL_NAME, cartItems);
-      successResponse(res, newCartItem, '商品已添加到购物车');
+      const result = await db.addCartItem(newCartItem);
+      successResponse(res, { cart_item_id: result[0].id, ...newCartItem }, '商品已添加到购物车');
     }
   } catch (error) {
-    console.error('添加到购物车失败:', error.message);
+    console.error('添加到购物车失败:', error);
     errorResponse(res, 500, '服务器错误: 添加到购物车失败');
   }
 };
@@ -153,49 +118,44 @@ const addItemToCart = async (req, res) => {
 /**
  * @desc    更新购物车中商品的数量或口味
  * @route   PUT /api/cart/:cart_item_id
- * @body    { quantity (optional), flavor (optional) }
+ * @body    { quantity (optional), selected_flavors (optional) }
  */
 const updateCartItem = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = TEST_USER_ID;
   const { cart_item_id } = req.params;
-  const { quantity, flavor } = req.body;
+  const { quantity, selected_flavors } = req.body;
 
   if (quantity !== undefined && parseInt(quantity) < 1) {
     return errorResponse(res, 400, '数量必须大于或等于1');
   }
-  if (quantity === undefined && flavor === undefined) {
+  if (quantity === undefined && selected_flavors === undefined) {
     return errorResponse(res, 400, '没有提供可更新的字段 (数量或口味)');
   }
 
   try {
-    let cartItems = await readData(CART_MODEL_NAME);
-    const cartItemIndex = cartItems.findIndex(item => item.id === cart_item_id && item.user_id === userId);
+    const cartItems = await db.getCartItems(userId);
+    const cartItem = cartItems.find(item => item.id === cart_item_id);
 
-    if (cartItemIndex === -1) {
+    if (!cartItem) {
       return errorResponse(res, 404, '购物车中未找到该商品');
     }
 
-    let updated = false;
+    const updates = {};
     if (quantity !== undefined) {
-      cartItems[cartItemIndex].quantity = parseInt(quantity);
-      updated = true;
+      updates.quantity = parseInt(quantity);
     }
-    if (flavor !== undefined && cartItems[cartItemIndex].item_type === 'dish') {
-      cartItems[cartItemIndex].flavor = flavor || null;
-      updated = true;
+    if (selected_flavors !== undefined && cartItem.dish_id) {
+      updates.selected_flavors = JSON.stringify(selected_flavors);
     }
 
-    if (updated) {
-        cartItems[cartItemIndex].added_at = new Date().toISOString(); // 更新时间戳
-        await writeData(CART_MODEL_NAME, cartItems);
-        successResponse(res, cartItems[cartItemIndex], '购物车商品已更新');
+    if (Object.keys(updates).length > 0) {
+      await db.updateCartItem(cart_item_id, updates);
+      successResponse(res, { ...cartItem, ...updates }, '购物车商品已更新');
     } else {
-        // 如果是套餐尝试更新口味，则不应视为有效更新
-        return errorResponse(res, 400, '套餐不支持更新口味，或未提供有效更新字段')
+      return errorResponse(res, 400, '套餐不支持更新口味，或未提供有效更新字段');
     }
-
   } catch (error) {
-    console.error('更新购物车商品失败:', error.message);
+    console.error('更新购物车商品失败:', error);
     errorResponse(res, 500, '服务器错误: 更新购物车商品失败');
   }
 };
@@ -205,22 +165,21 @@ const updateCartItem = async (req, res) => {
  * @route   DELETE /api/cart/:cart_item_id
  */
 const removeCartItem = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = TEST_USER_ID;
   const { cart_item_id } = req.params;
 
   try {
-    let cartItems = await readData(CART_MODEL_NAME);
-    const initialLength = cartItems.length;
-    cartItems = cartItems.filter(item => !(item.id === cart_item_id && item.user_id === userId));
+    const cartItems = await db.getCartItems(userId);
+    const cartItem = cartItems.find(item => item.id === cart_item_id);
 
-    if (cartItems.length === initialLength) {
-      return errorResponse(res, 404, '购物车中未找到该商品或无权限操作');
+    if (!cartItem) {
+      return errorResponse(res, 404, '购物车中未找到该商品');
     }
 
-    await writeData(CART_MODEL_NAME, cartItems);
+    await db.deleteCartItem(cart_item_id);
     successResponse(res, null, '商品已从购物车移除');
   } catch (error) {
-    console.error('移除购物车商品失败:', error.message);
+    console.error('移除购物车商品失败:', error);
     errorResponse(res, 500, '服务器错误: 移除购物车商品失败');
   }
 };
@@ -230,14 +189,12 @@ const removeCartItem = async (req, res) => {
  * @route   DELETE /api/cart
  */
 const clearCart = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = TEST_USER_ID;
   try {
-    let cartItems = await readData(CART_MODEL_NAME);
-    cartItems = cartItems.filter(item => item.user_id !== userId);
-    await writeData(CART_MODEL_NAME, cartItems);
+    await db.clearCart(userId);
     successResponse(res, null, '购物车已清空');
   } catch (error) {
-    console.error('清空购物车失败:', error.message);
+    console.error('清空购物车失败:', error);
     errorResponse(res, 500, '服务器错误: 清空购物车失败');
   }
 };
@@ -247,5 +204,5 @@ module.exports = {
   addItemToCart,
   updateCartItem,
   removeCartItem,
-  clearCart,
+  clearCart
 }; 

@@ -1,48 +1,33 @@
-const { readData, writeData, generateId } = require('../utils/db');
+const knex = require('../utils/knex');
 const { successResponse, errorResponse } = require('../utils/responseUtil');
+const { v4: uuidv4 } = require('uuid');
 
-const ADDRESS_MODEL_NAME = 'addresses';
-const USER_MODEL_NAME = 'users'; // Though users are not fully implemented, keep for consistency
+const DUMMY_USER_ID = "1";
 
-// 模拟登录用户 (后续替换为真实认证)
-const DUMMY_USER_ID = "1"; // Keep as string if IDs are strings, or number if numbers
-
-/**
- * @desc    获取当前用户的所有收货地址
- * @route   GET /api/addresses
- */
+// 获取当前用户的所有收货地址
 const getAddresses = async (req, res) => {
-  // const userId = req.user.id; // 实际从认证中获取
   const userId = DUMMY_USER_ID;
   try {
-    const addresses = await readData(ADDRESS_MODEL_NAME);
-    const userAddresses = addresses.filter(addr => addr.user_id === userId);
-    // 按是否默认和更新时间排序
-    userAddresses.sort((a, b) => {
-        if (a.is_default && !b.is_default) return -1;
-        if (!a.is_default && b.is_default) return 1;
-        return new Date(b.updated_at) - new Date(a.updated_at);
+    let addresses = await knex('addresses').where({ user_id: userId }).select();
+    addresses.sort((a, b) => {
+      if (a.is_default && !b.is_default) return -1;
+      if (!a.is_default && b.is_default) return 1;
+      return new Date(b.updated_at) - new Date(a.updated_at);
     });
-    successResponse(res, userAddresses);
+    successResponse(res, addresses);
   } catch (error) {
     console.error('获取地址列表失败:', error.message);
     errorResponse(res, 500, '服务器错误: 获取地址列表失败');
   }
 };
 
-/**
- * @desc    根据ID获取单个收货地址
- * @route   GET /api/addresses/:id
- */
+// 获取单个地址
 const getAddressById = async (req, res) => {
   const userId = DUMMY_USER_ID;
-  const { id } = req.params;
+  const { address_id } = req.params;
   try {
-    const addresses = await readData(ADDRESS_MODEL_NAME);
-    const address = addresses.find(addr => addr.id === id && addr.user_id === userId);
-    if (!address) {
-      return errorResponse(res, 404, '地址未找到或不属于当前用户');
-    }
+    const address = await knex('addresses').where({ id: address_id, user_id: userId }).first();
+    if (!address) return errorResponse(res, 404, '地址未找到或不属于当前用户');
     successResponse(res, address);
   } catch (error) {
     console.error('获取单个地址失败:', error.message);
@@ -50,40 +35,19 @@ const getAddressById = async (req, res) => {
   }
 };
 
-/**
- * @desc    创建新收货地址
- * @route   POST /api/addresses
- */
+// 创建新地址
 const createAddress = async (req, res) => {
   const userId = DUMMY_USER_ID;
-  const { 
-    recipient_name, 
-    phone_number, 
-    building_name,
-    room_details,
-    is_default = false 
-  } = req.body;
-
+  const { recipient_name, phone_number, building_name, room_details, is_default = false } = req.body;
   if (!recipient_name || !phone_number || !building_name || !room_details) {
-    return errorResponse(res, '收件人姓名、电话、楼宇名称和房间详情为必填项', 400);
+    return errorResponse(res, 400, '收件人姓名、电话、楼宇名称和房间详情为必填项');
   }
-
   try {
-    let addresses = await readData(ADDRESS_MODEL_NAME);
-    const newAddressId = generateId();
-
-    if (Boolean(is_default)) {
-      // 如果设为默认，则将该用户其他地址的is_default设为false
-      addresses = addresses.map(addr => {
-        if (addr.user_id === userId) {
-          return { ...addr, is_default: false, updated_at: new Date().toISOString() };
-        }
-        return addr;
-      });
+    if (is_default) {
+      await knex('addresses').where({ user_id: userId }).update({ is_default: false });
     }
-
     const newAddress = {
-      id: newAddressId,
+      id: uuidv4(),
       user_id: userId,
       recipient_name,
       phone_number,
@@ -93,9 +57,7 @@ const createAddress = async (req, res) => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-
-    addresses.push(newAddress);
-    await writeData(ADDRESS_MODEL_NAME, addresses);
+    await knex('addresses').insert(newAddress);
     successResponse(res, newAddress, '地址创建成功');
   } catch (error) {
     console.error('创建地址失败:', error.message);
@@ -103,81 +65,43 @@ const createAddress = async (req, res) => {
   }
 };
 
-/**
- * @desc    更新收货地址
- * @route   PUT /api/addresses/:id
- */
+// 更新地址
 const updateAddress = async (req, res) => {
   const userId = DUMMY_USER_ID;
-  const { id } = req.params;
-  const { 
-    recipient_name, 
-    phone_number, 
-    building_name,
-    room_details,
-    is_default 
-  } = req.body;
-
+  const { address_id } = req.params;
+  const { recipient_name, phone_number, building_name, room_details, is_default } = req.body;
   try {
-    let addresses = await readData(ADDRESS_MODEL_NAME);
-    const addressIndex = addresses.findIndex(addr => addr.id === id && addr.user_id === userId);
-
-    if (addressIndex === -1) {
-      return errorResponse(res, 404, '地址未找到或不属于当前用户');
-    }
-
+    const address = await knex('addresses').where({ id: address_id, user_id: userId }).first();
+    if (!address) return errorResponse(res, 404, '地址未找到或不属于当前用户');
     if (is_default !== undefined && Boolean(is_default)) {
-      // 如果将此地址设为默认，则将该用户其他地址的is_default设为false
-      addresses = addresses.map(addr => {
-        if (addr.user_id === userId && addr.id !== id) {
-          return { ...addr, is_default: false, updated_at: new Date().toISOString() };
-        }
-        return addr;
-      });
+      await knex('addresses').where({ user_id: userId }).update({ is_default: false });
     }
-    
-    const originalAddress = addresses[addressIndex];
-    const updatedAddress = {
-      ...originalAddress,
-      recipient_name: recipient_name || originalAddress.recipient_name,
-      phone_number: phone_number || originalAddress.phone_number,
-      building_name: building_name || originalAddress.building_name,
-      room_details: room_details || originalAddress.room_details,
-      is_default: is_default !== undefined ? Boolean(is_default) : originalAddress.is_default,
+    const updates = {
+      recipient_name: recipient_name || address.recipient_name,
+      phone_number: phone_number || address.phone_number,
+      building_name: building_name || address.building_name,
+      room_details: room_details || address.room_details,
+      is_default: is_default !== undefined ? Boolean(is_default) : address.is_default,
       updated_at: new Date().toISOString(),
     };
-
-    addresses[addressIndex] = updatedAddress;
-    await writeData(ADDRESS_MODEL_NAME, addresses);
-    successResponse(res, updatedAddress, '地址更新成功');
+    await knex('addresses').where({ id: address_id, user_id: userId }).update(updates);
+    const updated = await knex('addresses').where({ id: address_id, user_id: userId }).first();
+    successResponse(res, updated, '地址更新成功');
   } catch (error) {
     console.error('更新地址失败:', error.message);
     errorResponse(res, 500, '服务器错误: 更新地址失败');
   }
 };
 
-/**
- * @desc    删除收货地址
- * @route   DELETE /api/addresses/:id
- */
+// 删除地址
 const deleteAddress = async (req, res) => {
   const userId = DUMMY_USER_ID;
-  const { id } = req.params;
-
+  const { address_id } = req.params;
   try {
-    let addresses = await readData(ADDRESS_MODEL_NAME);
-    const addressIndex = addresses.findIndex(addr => addr.id === id && addr.user_id === userId);
-
-    if (addressIndex === -1) {
-      return errorResponse(res, 404, '地址未找到或不属于当前用户');
-    }
-
-    if (addresses[addressIndex].is_default) {
-      return errorResponse(res, 400, '不能删除默认地址。请先设置其他地址为默认。');
-    }
-
-    addresses.splice(addressIndex, 1);
-    await writeData(ADDRESS_MODEL_NAME, addresses);
+    const address = await knex('addresses').where({ id: address_id, user_id: userId }).first();
+    if (!address) return errorResponse(res, 404, '地址未找到或不属于当前用户');
+    if (address.is_default) return errorResponse(res, 400, '不能删除默认地址。请先设置其他地址为默认。');
+    await knex('addresses').where({ id: address_id, user_id: userId }).del();
     successResponse(res, null, '地址删除成功');
   } catch (error) {
     console.error('删除地址失败:', error.message);
@@ -185,35 +109,18 @@ const deleteAddress = async (req, res) => {
   }
 };
 
-/**
- * @desc    设置默认收货地址
- * @route   PUT /api/addresses/:id/set-default
- */
+// 设置为默认地址（兼容 /default 和 /set-default 路由）
 const setDefaultAddress = async (req, res) => {
   const userId = DUMMY_USER_ID;
-  const { id } = req.params;
-
+  // 兼容 /default 和 /set-default
+  const address_id = req.params.address_id || req.params.id;
   try {
-    let addresses = await readData(ADDRESS_MODEL_NAME);
-    const addressIndex = addresses.findIndex(addr => addr.id === id && addr.user_id === userId);
-
-    if (addressIndex === -1) {
-      return errorResponse(res, 404, '地址未找到或不属于当前用户');
-    }
-
-    addresses = addresses.map(addr => {
-      if (addr.user_id === userId) {
-        return { 
-            ...addr, 
-            is_default: addr.id === id, 
-            updated_at: new Date().toISOString() 
-        };
-      }
-      return addr;
-    });
-
-    await writeData(ADDRESS_MODEL_NAME, addresses);
-    successResponse(res, addresses.find(addr => addr.id === id), '默认地址设置成功');
+    const address = await knex('addresses').where({ id: address_id, user_id: userId }).first();
+    if (!address) return errorResponse(res, 404, '地址未找到或不属于当前用户');
+    await knex('addresses').where({ user_id: userId }).update({ is_default: false });
+    await knex('addresses').where({ id: address_id, user_id: userId }).update({ is_default: true, updated_at: new Date().toISOString() });
+    const updated = await knex('addresses').where({ id: address_id, user_id: userId }).first();
+    successResponse(res, updated, '默认地址设置成功');
   } catch (error) {
     console.error('设置默认地址失败:', error.message);
     errorResponse(res, 500, '服务器错误: 设置默认地址失败');
@@ -227,4 +134,4 @@ module.exports = {
   updateAddress,
   deleteAddress,
   setDefaultAddress,
-}; 
+};

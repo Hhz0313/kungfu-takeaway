@@ -1,9 +1,9 @@
-const { readData, writeData, generateId } = require('../utils/db');
+const db = require('../utils/db');
 const { successResponse, errorResponse } = require('../utils/responseUtil');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs'); // Sync for uploads dir check
-const fsp = require('fs').promises; // Async for file operations
+const fs = require('fs');
+const fsp = require('fs').promises;
 
 const COMBO_MODEL_NAME = 'combos';
 const DISH_MODEL_NAME = 'dishes';
@@ -15,19 +15,17 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Multer 配置
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
-    cb(null, generateId() + path.extname(file.originalname));
+    cb(null, db.generateId() + path.extname(file.originalname));
   }
 });
-
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB 限制
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: function (req, file, cb) {
     const filetypes = /jpeg|jpg|png|gif/;
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
@@ -39,18 +37,22 @@ const upload = multer({
   }
 }).single('image');
 
-// 辅助函数：删除文件（如果存在）
 async function deleteFileIfExists(filePath) {
-    if (!filePath) return;
-    const absolutePath = path.join(__dirname, '../', filePath);
-    try {
-        await fsp.access(absolutePath);
-        await fsp.unlink(absolutePath);
-    } catch (error) {
-        if (error.code !== 'ENOENT') {
-            console.warn(`无法删除文件 ${absolutePath}: ${error.message}`);
-        }
+  if (!filePath) return;
+  let absolutePath = path.isAbsolute(filePath) ? filePath : path.join(__dirname, '../..', filePath);
+  if (filePath.startsWith('../uploads')) {
+    absolutePath = path.join(__dirname, filePath.substring(filePath.indexOf('../') + 2));
+  } else if (filePath.startsWith('uploads/')) {
+    absolutePath = path.join(__dirname, '..', filePath);
+  }
+  try {
+    await fsp.access(absolutePath);
+    await fsp.unlink(absolutePath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn(`无法删除文件 ${absolutePath}: ${error.message}`);
     }
+  }
 }
 
 /**
@@ -59,35 +61,29 @@ async function deleteFileIfExists(filePath) {
  */
 const getAllCombos = async (req, res) => {
   try {
-    let combos = await readData(COMBO_MODEL_NAME);
-    const availableCombos = combos.filter(c => c.is_available);
-    
-    // 为每个可用套餐附加其包含的菜品信息
-    const dishes = await readData(DISH_MODEL_NAME);
-    const comboDishesLinks = await readData(COMBO_DISHES_MODEL_NAME);
-
-    for (let combo of availableCombos) {
-      const relatedDishLinks = comboDishesLinks.filter(link => link.combo_id === combo.id);
-      combo.dishes = relatedDishLinks.map(link => {
-        const dishInfo = dishes.find(d => d.id === link.dish_id && d.is_available);
-        return dishInfo ? { 
-            dish_id: dishInfo.id, 
-            name: dishInfo.name, 
-            quantity: link.quantity,
-            price: dishInfo.price, // 单品价格
-            image_url: dishInfo.image_url
+    let combos = await db.getAllCombos({ is_enabled: true });
+    const comboIds = combos.map(c => c.id);
+    const comboDishesLinks = await db.getComboDishes();
+    const dishes = await db.getAllDishes({ is_available: true });
+    for (let combo of combos) {
+      const relatedLinks = comboDishesLinks.filter(link => link.combo_id === combo.id);
+      combo.dishes = relatedLinks.map(link => {
+        const dishInfo = dishes.find(d => d.id === link.dish_id);
+        return dishInfo ? {
+          dish_id: dishInfo.id,
+          name: dishInfo.name,
+          quantity: link.quantity,
+          price: dishInfo.price,
+          image_url: dishInfo.image_url,
+          is_available: dishInfo.is_available
         } : null;
-      }).filter(d => d !== null); // 过滤掉找不到或不可用的菜品
-      // 如果套餐中包含任何一个已下架的菜品，则该套餐不应显示 (或者根据业务需求处理)
-      if (combo.dishes.length !== relatedDishLinks.length) {
-          combo.contains_unavailable_items = true; // 标记套餐含有不可用菜品
-          // 根据产品策略，可以选择不显示此套餐或特殊标记
+      }).filter(d => d);
+      if (combo.dishes.length !== relatedLinks.length) {
+        combo.contains_unavailable_items = true;
       }
     }
-    // 再次过滤，只显示不包含不可用菜品的套餐 (如果策略如此)
-    const finalCombos = availableCombos.filter(c => !c.contains_unavailable_items);
-
-    successResponse(res, finalCombos.sort((a,b) => a.name.localeCompare(b.name)), 'Combos retrieved successfully');
+    const finalCombos = combos.filter(c => !c.contains_unavailable_items);
+    successResponse(res, finalCombos.sort((a, b) => a.name.localeCompare(b.name)), 'Combos retrieved successfully');
   } catch (error) {
     console.error('获取套餐列表失败:', error.message);
     errorResponse(res, 500, '服务器错误: 获取套餐列表失败');
@@ -99,27 +95,28 @@ const getAllCombos = async (req, res) => {
  * @route   GET /api/combos/admin/all
  */
 const getAllCombosAdmin = async (req, res) => {
-    try {
-        let combos = await readData(COMBO_MODEL_NAME);
-        const dishes = await readData(DISH_MODEL_NAME);
-        const comboDishesLinks = await readData(COMBO_DISHES_MODEL_NAME);
-
-        for (let combo of combos) {
-            const relatedDishLinks = comboDishesLinks.filter(link => link.combo_id === combo.id);
-            combo.dishes = relatedDishLinks.map(link => {
-                const dishInfo = dishes.find(d => d.id === link.dish_id);
-                return dishInfo ? { 
-                    dish_id: dishInfo.id, 
-                    name: dishInfo.name, 
-                    quantity: link.quantity 
-                } : { dish_id: link.dish_id, name: '[菜品已删除或ID错误]', quantity: link.quantity };
-            });
-        }
-        successResponse(res, combos.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)), 'All combos retrieved successfully for admin');
-    } catch (error) {
-        console.error('获取所有套餐失败 (管理端):', error.message);
-        errorResponse(res, 500, '服务器错误: 获取所有套餐失败 (管理端)');
+  try {
+    let combos = await db.getAllCombos();
+    const comboDishesLinks = await db.getComboDishes();
+    const dishes = await db.getAllDishes();
+    for (let combo of combos) {
+      const relatedLinks = comboDishesLinks.filter(link => link.combo_id === combo.id);
+      combo.dishes = relatedLinks.map(link => {
+        const dishInfo = dishes.find(d => d.id === link.dish_id);
+        return dishInfo ? {
+          dish_id: dishInfo.id,
+          name: dishInfo.name,
+          quantity: link.quantity
+        } : { dish_id: link.dish_id, name: '[菜品已删除或ID错误]', quantity: link.quantity };
+      });
+      // 修复：补充 is_enabled 字段，兼容前端依赖
+      combo.is_enabled = !!combo.is_enabled;
     }
+    successResponse(res, combos.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)), 'All combos retrieved successfully for admin');
+  } catch (error) {
+    console.error('获取所有套餐失败 (管理端):', error.message);
+    errorResponse(res, 500, '服务器错误: 获取所有套餐失败 (管理端)');
+  }
 };
 
 /**
@@ -128,28 +125,21 @@ const getAllCombosAdmin = async (req, res) => {
  */
 const getComboById = async (req, res) => {
   try {
-    const combos = await readData(COMBO_MODEL_NAME);
-    const combo = combos.find(c => c.id === req.params.id);
-    if (!combo) {
-      return errorResponse(res, 404, '套餐未找到');
-    }
-
-    const dishes = await readData(DISH_MODEL_NAME);
-    const comboDishesLinks = await readData(COMBO_DISHES_MODEL_NAME);
-    const relatedDishLinks = comboDishesLinks.filter(link => link.combo_id === combo.id);
-    
-    combo.dishes = relatedDishLinks.map(link => {
+    const combo = await db.getComboById(req.params.id);
+    if (!combo) return errorResponse(res, 404, '套餐未找到');
+    const comboDishesLinks = await db.getComboDishes(combo.id);
+    const dishes = await db.getAllDishes();
+    combo.dishes = comboDishesLinks.map(link => {
       const dishInfo = dishes.find(d => d.id === link.dish_id);
-      return dishInfo ? { 
-        dish_id: dishInfo.id, 
-        name: dishInfo.name, 
-        quantity: link.quantity, 
+      return dishInfo ? {
+        dish_id: dishInfo.id,
+        name: dishInfo.name,
+        quantity: link.quantity,
         price: dishInfo.price,
         image_url: dishInfo.image_url,
-        is_available: dishInfo.is_available // 包含菜品是否可用状态
+        is_available: dishInfo.is_available
       } : null;
     }).filter(d => d);
-
     successResponse(res, combo, 'Combo retrieved successfully');
   } catch (error) {
     console.error('获取单个套餐失败:', error.message);
@@ -160,81 +150,55 @@ const getComboById = async (req, res) => {
 /**
  * @desc    创建新套餐
  * @route   POST /api/combos
- * @body    { name, description, price, dishes: [{dish_id, quantity}], is_available }
  */
 const createCombo = async (req, res) => {
   upload(req, res, async (err) => {
-    if (err) {
-      return errorResponse(res, 400, err.message || err);
-    }
-
-    const { name, description, price, dishes: dishesInComboInput, is_available = true } = req.body;
+    if (err) return errorResponse(res, 400, err.message || err);
+    const { name, description, price, dishes: dishesInComboInput, is_enabled = true } = req.body;
     const image_url = req.file ? `/uploads/combos/${req.file.filename}` : null;
-
     let dishesInComboParsed = [];
     if (typeof dishesInComboInput === 'string') {
-      try {
-        dishesInComboParsed = JSON.parse(dishesInComboInput);
-      } catch (e) {
-        if (image_url) await deleteFileIfExists(image_url);
-        return errorResponse(res, 400, '套餐中的菜品列表格式无效，应为JSON字符串数组');
-      }
+      try { dishesInComboParsed = JSON.parse(dishesInComboInput); } catch { dishesInComboParsed = []; }
     } else if (Array.isArray(dishesInComboInput)) {
       dishesInComboParsed = dishesInComboInput;
     }
-
     if (!name || price === undefined || !dishesInComboParsed || !Array.isArray(dishesInComboParsed) || dishesInComboParsed.length === 0) {
       if (image_url) await deleteFileIfExists(image_url);
       return errorResponse(res, 400, '套餐名称、价格和包含的菜品列表 (至少一项) 为必填项');
     }
-
     try {
-      const allDishes = await readData(DISH_MODEL_NAME);
-      // Check for combo name duplication
-      const existingCombos = await readData(COMBO_MODEL_NAME);
-      if (existingCombos.some(c => c.name === name)) {
+      const allDishes = await db.getAllDishes({ is_available: true });
+      for (const item of dishesInComboParsed) {
+        if (!item.dish_id || !item.quantity || item.quantity < 1) {
+          if (image_url) await deleteFileIfExists(image_url);
+          return errorResponse(res, 400, '套餐中的菜品必须包含有效的dish_id和大于0的数量');
+        }
+        const dishExists = allDishes.find(d => d.id === item.dish_id);
+        if (!dishExists) {
+          if (image_url) await deleteFileIfExists(image_url);
+          return errorResponse(res, 400, `套餐中包含的菜品ID ${item.dish_id} 不存在或已下架`);
+        }
+      }
+      const existingCombos = await db.getAllCombos();
+      if (existingCombos.find(c => c.name === name)) {
         if (image_url) await deleteFileIfExists(image_url);
         return errorResponse(res, 400, '已存在同名套餐');
       }
-
-      for (const item of dishesInComboParsed) {
-        if (!item.dish_id || !item.quantity || item.quantity < 1) {
-            if (image_url) await deleteFileIfExists(image_url);
-            return errorResponse(res, 400, '套餐中的菜品必须包含有效的dish_id和大于0的数量');
-        }
-        const dishExists = allDishes.find(d => d.id === item.dish_id && d.is_available);
-        if (!dishExists) {
-          if (image_url) await deleteFileIfExists(image_url);
-          return errorResponse(res, 404, `套餐中包含的菜品ID ${item.dish_id} 不存在或已下架`);
-        }
-      }
-
-      let combos = await readData(COMBO_MODEL_NAME);
-      const newComboId = generateId();
       const newCombo = {
-        id: newComboId,
+        id: db.generateId(),
         name,
         description: description || null,
         price: parseFloat(price),
         image_url,
-        is_available: Boolean(is_available),
+        is_enabled: Boolean(is_enabled),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-      combos.push(newCombo);
-      await writeData(COMBO_MODEL_NAME, combos);
-
-      let comboDishesLinks = await readData(COMBO_DISHES_MODEL_NAME);
-      const newComboDishLinks = dishesInComboParsed.map(item => ({
-        id: generateId(), // ID for the link itself
-        combo_id: newComboId,
-        dish_id: item.dish_id,
-        quantity: parseInt(item.quantity),
-      }));
-      comboDishesLinks.push(...newComboDishLinks);
-      await writeData(COMBO_DISHES_MODEL_NAME, comboDishesLinks);
-
-      successResponse(res, { ...newCombo, dishes: newComboDishLinks }, '套餐创建成功', 201);
+      await db.createCombo(newCombo);
+      for (const item of dishesInComboParsed) {
+        await db.addComboDish(newCombo.id, item.dish_id, item.quantity);
+      }
+      successResponse(res, { ...newCombo, dishes: dishesInComboParsed }, '套餐创建成功', 201);
     } catch (error) {
       console.error('创建套餐失败:', error.message);
       if (image_url) await deleteFileIfExists(image_url);
@@ -246,106 +210,75 @@ const createCombo = async (req, res) => {
 /**
  * @desc    更新套餐信息
  * @route   PUT /api/combos/:id
- * @body    { name, description, price, dishes: [{dish_id, quantity}], is_available }
  */
 const updateCombo = async (req, res) => {
   const { id } = req.params;
   upload(req, res, async (err) => {
-    if (err) {
-      return errorResponse(res, 400, err.message || err);
-    }
-
-    const { name, description, price, dishes: dishesInComboInput, is_available } = req.body;
-
+    if (err) return errorResponse(res, 400, err.message || err);
+    const { name, description, price, dishes: dishesInComboInput, is_enabled } = req.body;
     let dishesInComboParsed;
-    if (dishesInComboInput !== undefined) { // Only parse if provided
+    console.log('[套餐更新] req.body:', req.body);
+    if (dishesInComboInput !== undefined) {
       if (typeof dishesInComboInput === 'string') {
-        try {
-          dishesInComboParsed = JSON.parse(dishesInComboInput);
-        } catch (e) {
-          if (req.file) await deleteFileIfExists(`/uploads/combos/${req.file.filename}`);
-          return errorResponse(res, 400, '更新套餐中的菜品列表格式无效，应为JSON字符串数组');
-        }
+        try { dishesInComboParsed = JSON.parse(dishesInComboInput); } catch { return errorResponse(res, 400, '更新套餐中的菜品列表格式无效，应为JSON字符串数组'); }
       } else if (Array.isArray(dishesInComboInput)) {
         dishesInComboParsed = dishesInComboInput;
       } else {
-        if (req.file) await deleteFileIfExists(`/uploads/combos/${req.file.filename}`);
         return errorResponse(res, 400, '更新套餐中的菜品列表格式无效');
       }
-       // Validate parsed dishes structure only if dishesInComboParsed is set (i.e., input was provided)
-      if (dishesInComboParsed && (!Array.isArray(dishesInComboParsed) || dishesInComboParsed.length === 0)) {
-        if (req.file) await deleteFileIfExists(`/uploads/combos/${req.file.filename}`);
+      if (!Array.isArray(dishesInComboParsed) || dishesInComboParsed.length === 0) {
         return errorResponse(res, 400, '套餐更新时，提供的菜品列表必须是包含至少一项的数组');
       }
     }
-
     try {
-      let combos = await readData(COMBO_MODEL_NAME);
-      const comboIndex = combos.findIndex(c => c.id === id);
-      if (comboIndex === -1) {
+      const combo = await db.getComboById(id);
+      if (!combo) {
         if (req.file) await deleteFileIfExists(`/uploads/combos/${req.file.filename}`);
         return errorResponse(res, 404, '套餐未找到');
       }
-
-      const originalCombo = combos[comboIndex];
-      let new_image_url = originalCombo.image_url;
-
+      let new_image_url = combo.image_url;
       if (req.file) {
-        if (originalCombo.image_url) {
-          await deleteFileIfExists(originalCombo.image_url);
-        }
+        if (combo.image_url) await deleteFileIfExists(combo.image_url);
         new_image_url = `/uploads/combos/${req.file.filename}`;
       }
-      
-      if (name && name !== originalCombo.name) {
-        const allCombos = await readData(COMBO_MODEL_NAME);
-        if (allCombos.some(c => c.id !== id && c.name === name)) {
-            if (req.file && new_image_url !== originalCombo.image_url) await deleteFileIfExists(new_image_url);
-            return errorResponse(res, 400, '已存在另一个同名套餐');
+      if (name && name !== combo.name) {
+        const allCombos = await db.getAllCombos();
+        if (allCombos.find(c => c.id !== id && c.name === name)) {
+          if (req.file && new_image_url !== combo.image_url) await deleteFileIfExists(new_image_url);
+          return errorResponse(res, 400, '已存在另一个同名套餐');
         }
       }
-
-      const updatedCombo = {
-        ...originalCombo,
-        name: name || originalCombo.name,
-        description: description !== undefined ? description : originalCombo.description,
-        price: price !== undefined ? parseFloat(price) : originalCombo.price,
+      let enabled = combo.is_enabled;
+      if (is_enabled !== undefined) {
+        enabled = (is_enabled === true || is_enabled === 1 || is_enabled === '1' || is_enabled === 'true');
+      }
+      console.log(`[套餐更新] 解析 enabled:`, enabled, 'is_enabled:', is_enabled);
+      const updates = {
+        name: name || combo.name,
+        description: description !== undefined ? description : combo.description,
+        price: price !== undefined ? parseFloat(price) : combo.price,
         image_url: new_image_url,
-        is_available: is_available !== undefined ? Boolean(is_available) : originalCombo.is_available,
-        updated_at: new Date().toISOString(),
+        is_enabled: enabled,
       };
-      combos[comboIndex] = updatedCombo;
-      await writeData(COMBO_MODEL_NAME, combos);
-
-      // 更新套餐菜品关联
-      if (dishesInComboParsed) { // dishesInComboParsed will be undefined if not in request
-        let comboDishesLinks = await readData(COMBO_DISHES_MODEL_NAME);
-        // 移除旧的关联
-        comboDishesLinks = comboDishesLinks.filter(link => link.combo_id !== id);
-        // 添加新的关联 (如果dishesInComboParsed不是空数组)
-        if (dishesInComboParsed.length > 0) {
-            const newComboDishLinks = dishesInComboParsed.map(item => ({
-                id: generateId(),
-                combo_id: id,
-                dish_id: item.dish_id,
-                quantity: parseInt(item.quantity),
-            }));
-            comboDishesLinks.push(...newComboDishLinks);
+      console.log('[套餐更新] updates:', updates);
+      const updateResult = await db.updateCombo(id, updates);
+      console.log('[套餐更新] db.updateCombo result:', updateResult);
+      if (dishesInComboParsed) {
+        await db.removeComboDish(id);
+        for (const item of dishesInComboParsed) {
+          if (!item.dish_id || !item.quantity || item.quantity < 1) continue;
+          await db.addComboDish(id, item.dish_id, item.quantity);
         }
-        await writeData(COMBO_DISHES_MODEL_NAME, comboDishesLinks);
-        updatedCombo.dishes = dishesInComboParsed; // 返回更新后的菜品列表
-      } else {
-        // 如果不提供dishesInCombo，则保持原有关联，并从数据库中读取展示
-        let existingComboDishes = await readData(COMBO_DISHES_MODEL_NAME);
-        updatedCombo.dishes = existingComboDishes.filter(link => link.combo_id === id).map(item => ({dish_id: item.dish_id, quantity: item.quantity}));
       }
-
-      successResponse(res, { ...updatedCombo, dishes: dishesInComboParsed }, '套餐更新成功');
+      const updatedCombo = await db.getComboById(id);
+      const comboDishesLinks = await db.getComboDishes(id);
+      updatedCombo.dishes = comboDishesLinks.map(link => ({ dish_id: link.dish_id, quantity: link.quantity }));
+      updatedCombo.is_enabled = !!updatedCombo.is_enabled;
+      console.log('[套餐更新] 返回 updatedCombo:', updatedCombo);
+      successResponse(res, updatedCombo, '套餐更新成功');
     } catch (error) {
       console.error('更新套餐失败:', error.message);
-       if (req.file && new_image_url && new_image_url !== originalCombo.image_url) {
-          await deleteFileIfExists(new_image_url);
-      }
+      if (req.file) await deleteFileIfExists(`/uploads/combos/${req.file.filename}`);
       errorResponse(res, 500, '服务器错误: 更新套餐失败');
     }
   });
@@ -358,24 +291,12 @@ const updateCombo = async (req, res) => {
 const deleteCombo = async (req, res) => {
   const { id } = req.params;
   try {
-    let combos = await readData(COMBO_MODEL_NAME);
-    const comboIndex = combos.findIndex(c => c.id === id);
-    if (comboIndex === -1) {
-      return errorResponse(res, 404, '套餐未找到');
-    }
-
-    const comboToDelete = combos[comboIndex];
-    if (comboToDelete.image_url) {
-      await deleteFileIfExists(comboToDelete.image_url);
-    }
-    combos.splice(comboIndex, 1);
-    await writeData(COMBO_MODEL_NAME, combos);
-
-    // 删除关联的 combo_dishes 条目
-    let comboDishesLinks = await readData(COMBO_DISHES_MODEL_NAME);
-    const updatedComboDishes = comboDishesLinks.filter(link => link.combo_id !== id);
-    await writeData(COMBO_DISHES_MODEL_NAME, updatedComboDishes);
-
+    const combo = await db.getComboById(id);
+    if (!combo) return errorResponse(res, 404, '套餐未找到');
+    // 允许套餐直接删除，无论是否有菜品关联
+    if (combo.image_url) await deleteFileIfExists(combo.image_url);
+    await db.deleteCombo(id);
+    await db.removeComboDish(id);
     successResponse(res, null, '套餐删除成功');
   } catch (error) {
     console.error('删除套餐失败:', error.message);
@@ -390,4 +311,5 @@ module.exports = {
   createCombo,
   updateCombo,
   deleteCombo,
-}; 
+  upload
+};

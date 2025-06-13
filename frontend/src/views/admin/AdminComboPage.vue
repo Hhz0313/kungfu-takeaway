@@ -80,8 +80,8 @@
               <span v-else class="text-xs text-slate-400 italic">无</span>
             </td>
             <td class="px-4 py-3 whitespace-nowrap">
-              <span :class="combo.is_available ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'" class="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full">
-                {{ combo.is_available ? '在售' : '停售' }}
+              <span :class="combo.is_enabled ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'" class="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full">
+                {{ combo.is_enabled ? '在售' : '停售' }}
               </span>
             </td>
             <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
@@ -91,14 +91,14 @@
                   <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" />
                 </svg>编辑
               </button>
-              <button @click="toggleAvailability(combo)" :class="combo.is_available ? 'text-amber-600 hover:text-amber-800' : 'text-green-600 hover:text-green-800'" class="transition-colors duration-150 p-1 rounded-md inline-flex items-center" :title="combo.is_available ? '停售' : '上架'">
-                <svg v-if="combo.is_available" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+              <button @click="toggleAvailability(combo)" :class="combo.is_enabled ? 'text-amber-600 hover:text-amber-800' : 'text-green-600 hover:text-green-800'" class="transition-colors duration-150 p-1 rounded-md inline-flex items-center" :title="combo.is_enabled ? '停售' : '上架'">
+                <svg v-if="combo.is_enabled" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
                 </svg>
                 <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" />
                 </svg>
-                {{ combo.is_available ? '停售' : '上架' }}
+                {{ combo.is_enabled ? '停售' : '上架' }}
               </button>
               <button @click="confirmDeleteCombo(combo.id)" class="text-red-600 hover:text-red-800 transition-colors duration-150 p-1 rounded-md inline-flex items-center" title="删除">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
@@ -185,8 +185,8 @@
                        <p v-if="formErrors.dishes" class="text-xs text-red-600 mt-1">{{ formErrors.dishes }}</p>
                     </div>
                      <div class="sm:col-span-2 flex items-center mt-2">
-                       <input id="comboAvailable" type="checkbox" v-model="currentCombo.is_available" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded">
-                       <label for="comboAvailable" class="ml-2 block text-sm font-medium text-slate-700">套餐在售 (上架)</label>
+                       <input id="comboEnabled" type="checkbox" v-model="currentCombo.is_enabled" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded">
+                       <label for="comboEnabled" class="ml-2 block text-sm font-medium text-slate-700">套餐在售 (上架)</label>
                     </div>
                   </div>
                 </div>
@@ -230,7 +230,7 @@ const currentCombo = ref({
   description: '',
   price: null,
   image_url: null,
-  is_available: true,
+  is_enabled: true,
   dishes: [], // Array of { dish_id: string, quantity: number }
 });
 const selectedImageFile = ref(null);
@@ -238,7 +238,37 @@ const imagePreviewUrl = ref(null);
 const formErrors = ref({}); // For form validation errors in the modal
 
 const selectableDishes = computed(() => {
-  return allDishes.value.filter(dish => dish.is_available);
+  if (!Array.isArray(allDishes.value)) {
+    console.error('allDishes is not an array:', allDishes.value);
+    return [];
+  }
+
+  console.log('Total dishes:', allDishes.value.length);
+  
+  const filtered = allDishes.value.filter(dish => {
+    if (!dish) {
+      console.warn('Found null/undefined dish');
+      return false;
+    }
+    
+    // 打印每个菜品的详细信息
+    console.log(`Filtering dish "${dish.name}" (ID: ${dish.id}):`, {
+      is_enabled: dish.is_enabled,
+      type: typeof dish.is_enabled,
+      raw_value: dish.is_enabled
+    });
+    
+    return dish.is_enabled === true;
+  });
+
+  console.log('Filtered dishes count:', filtered.length);
+  console.log('Filtered dishes:', filtered.map(d => ({
+    id: d.id,
+    name: d.name,
+    is_enabled: d.is_enabled
+  })));
+  
+  return filtered;
 });
 
 const clearMessagesAndErrors = () => {
@@ -256,31 +286,68 @@ const fetchInitialData = async () => {
   isLoading.value = true;
   clearMessagesAndErrors();
   try {
+    console.log('Fetching dishes and combos...');
     const [dishesRes, combosRes] = await Promise.all([
       axios.get(`${API_BASE_URL}/dishes/admin/all`),
       axios.get(`${API_BASE_URL}/combos/admin/all`)
     ]);
 
+    console.log('Complete Dishes API Response:', JSON.stringify(dishesRes.data, null, 2));
+
     if (dishesRes.data && dishesRes.data.code === 0) {
-      allDishes.value = dishesRes.data.data.map(dish => ({
-        ...dish,
-        flavors: dish.flavors ? (typeof dish.flavors === 'string' ? JSON.parse(dish.flavors) : dish.flavors) : []
-      }));
+      if (!Array.isArray(dishesRes.data.data)) {
+        console.error('Dishes data is not an array:', dishesRes.data.data);
+        errorMessage.value = '菜品数据格式错误';
+        return;
+      }
+
+      allDishes.value = dishesRes.data.data.map(dish => {
+        // 打印完整的菜品数据结构
+        console.log(`Complete dish data for ${dish.name}:`, dish);
+
+        // 设置默认值为 true，因为这是管理端，默认应该显示所有菜品
+        const isEnabled = dish.is_enabled === undefined ? true : 
+                         dish.is_enabled === true || 
+                         dish.is_enabled === 1 || 
+                         dish.is_enabled === '1' || 
+                         dish.is_enabled === 'true' ||
+                         dish.is_enabled === 'yes' ||
+                         dish.is_enabled === 'Y' ||
+                         dish.is_enabled === 'y';
+
+        console.log(`Converted is_enabled for ${dish.name}:`, {
+          original: dish.is_enabled,
+          converted: isEnabled
+        });
+
+        return {
+          ...dish,
+          is_enabled: isEnabled,
+          flavors: dish.flavors ? (typeof dish.flavors === 'string' ? JSON.parse(dish.flavors) : dish.flavors) : []
+        };
+      });
+
+      console.log('Final processed dishes:', allDishes.value.map(d => ({
+        name: d.name,
+        is_enabled: d.is_enabled,
+        id: d.id
+      })));
     } else {
-      errorMessage.value = dishesRes.data.message || '获取菜品列表失败 (用于套餐)';
+      console.error('Failed to fetch dishes:', dishesRes.data);
+      errorMessage.value = dishesRes.data?.message || '获取菜品列表失败 (用于套餐)';
     }
 
     if (combosRes.data && combosRes.data.code === 0) {
       combos.value = combosRes.data.data.map(combo => ({
         ...combo,
-        dishes: Array.isArray(combo.dishes) ? combo.dishes : [] // Ensure dishes is an array
+        dishes: Array.isArray(combo.dishes) ? combo.dishes : []
       }));
     } else {
-      errorMessage.value = (errorMessage.value ? errorMessage.value + "; " : "") + (combosRes.data.message || '获取套餐列表失败');
+      errorMessage.value = (errorMessage.value ? errorMessage.value + "; " : "") + (combosRes.data?.message || '获取套餐列表失败');
     }
 
   } catch (error) {
-    console.error('Error fetching initial data for combos page:', error);
+    console.error('Error fetching initial data:', error);
     errorMessage.value = error.response?.data?.message || error.message || '加载页面数据失败，请检查网络连接并重试。';
   } finally {
     isLoading.value = false;
@@ -295,7 +362,7 @@ const getDishName = (dishId) => {
 };
 
 const resetCurrentCombo = () => {
-  currentCombo.value = { id: null, name: '', description: '', price: null, image_url: null, is_available: true, dishes: [] };
+  currentCombo.value = { id: null, name: '', description: '', price: null, image_url: null, is_enabled: true, dishes: [] };
   selectedImageFile.value = null;
   imagePreviewUrl.value = null;
   formErrors.value = {};
@@ -386,21 +453,17 @@ const handleSubmit = async () => {
   if (!validateForm()) {
     return;
   }
-
   isSubmitting.value = true;
   const formData = new FormData();
   formData.append('name', currentCombo.value.name);
   formData.append('description', currentCombo.value.description || '');
   formData.append('price', currentCombo.value.price);
-  formData.append('is_available', currentCombo.value.is_available);
-  
-  // Backend expects `dishes` as a JSON string of [{dish_id, quantity}]
+  // 后端实际字段为 is_enabled，前端 is_enabled 需转为 is_enabled
+  formData.append('is_enabled', currentCombo.value.is_enabled ? 1 : 0);
   formData.append('dishes', JSON.stringify(currentCombo.value.dishes || []));
-  
   if (selectedImageFile.value) {
     formData.append('image', selectedImageFile.value);
   }
-
   try {
     let response;
     if (isEditing.value) {
@@ -412,7 +475,6 @@ const handleSubmit = async () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
     }
-
     if (response.data && response.data.code === 0) {
       successMessage.value = isEditing.value ? '套餐更新成功！' : '套餐添加成功！';
       closeModal();
@@ -430,35 +492,29 @@ const handleSubmit = async () => {
 
 const toggleAvailability = async (combo) => {
   clearMessagesAndErrors();
-  const originalStatus = combo.is_available;
-  const newStatus = !combo.is_available;
+  const originalStatus = combo.is_enabled;
+  const newStatus = !combo.is_enabled;
   const actionText = newStatus ? '上架' : '停售';
-
-  combo.is_available = newStatus; // Optimistic update
-
+  combo.is_enabled = newStatus;
   try {
-    // Create a payload for PUT. Backend expects FormData for combos.
     const formData = new FormData();
-    formData.append('name', combo.name); 
+    formData.append('name', combo.name);
     formData.append('price', combo.price);
     formData.append('description', combo.description || '');
-    formData.append('is_available', newStatus);
+    formData.append('is_enabled', newStatus ? 1 : 0);
     formData.append('dishes', JSON.stringify(combo.dishes || []));
-    // If combo.image_url exists and no new image is selected, backend should retain it.
-    // No need to append image_url itself unless backend logic requires it when image file is absent.
-
     const response = await axios.put(`${API_BASE_URL}/combos/${combo.id}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
-
     if (response.data && response.data.code === 0) {
       successMessage.value = `套餐 "${combo.name}" 已成功${actionText}。`;
+      await fetchInitialData();
     } else {
-      combo.is_available = originalStatus; 
+      combo.is_enabled = originalStatus; 
       throw new Error(response.data.message || `无法${actionText}套餐`);
     }
   } catch (error) {
-    combo.is_available = originalStatus; 
+    combo.is_enabled = originalStatus; 
     console.error(`Error toggling availability for ${combo.name}:`, error);
     errorMessage.value = error.response?.data?.message || error.message || `操作失败，无法${actionText}套餐。`;
   }
@@ -491,4 +547,4 @@ const confirmDeleteCombo = async (comboId) => {
 .input-field {
   @apply mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm placeholder-slate-400;
 }
-</style> 
+</style>
