@@ -27,6 +27,7 @@ router.put('/:address_id', updateAddress);
 router.delete('/:address_id', deleteAddress);
 
 // 设置为默认地址
+router.patch('/:address_id/default', setDefaultAddress); // 兼容前端 /default
 router.patch('/:address_id/set-default', setDefaultAddress);
 
-module.exports = router; 
+module.exports = router;

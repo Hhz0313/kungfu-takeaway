@@ -11,7 +11,7 @@
       <router-link to="/menu" class="mt-4 inline-block text-blue-600 hover:underline">返回菜单</router-link>
     </div>
 
-    <div v-if="dish && !isLoading" class="bg-white shadow-xl rounded-lg overflow-hidden">
+    <div v-else-if="dish" class="bg-white shadow-xl rounded-lg overflow-hidden">
       <div class="md:flex">
         <!-- Image Section -->
         <div class="md:w-1/2">
@@ -38,17 +38,18 @@
           </div>
 
           <!-- Flavor Selection -->
-          <div v-if="dish.flavors && dish.flavors.length > 0 && dish.is_available" class="mb-6">
+          <div v-if="Array.isArray(dish.flavors) && dish.flavors.length > 0 && dish.is_available" class="mb-6">
             <h3 class="text-lg font-semibold text-gray-700 mb-2">选择口味:</h3>
             <div class="flex flex-wrap gap-2">
-              <button 
-                v-for="flavor in dish.flavors" 
-                :key="flavor" 
-                @click="selectedFlavor = flavor"
+              <button
+                v-for="flavor in dish.flavors"
+                :key="flavor"
+                @click="() => selectFlavor(flavor)"
                 :class="[
                   'px-4 py-2 border rounded-md text-sm font-medium transition-colors',
                   selectedFlavor === flavor ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
                 ]"
+                type="button"
               >
                 {{ flavor }}
               </button>
@@ -70,11 +71,11 @@
             <button 
               @click="handleAddToCart"
               class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50 disabled:opacity-50"
-              :disabled="isAddingToCart || (dish.flavors && dish.flavors.length > 0 && !selectedFlavor)"
+              :disabled="isAddingToCart || (Array.isArray(dish.flavors) && dish.flavors.length > 0 && !selectedFlavor)"
             >
               {{ isAddingToCart ? '添加中...' : '加入购物车' }}
             </button>
-            <p v-if="dish.flavors && dish.flavors.length > 0 && !selectedFlavor && !isAddingToCart" class="text-red-500 text-sm mt-2">请选择口味</p>
+            <p v-if="Array.isArray(dish.flavors) && dish.flavors.length > 0 && !selectedFlavor && !isAddingToCart" class="text-red-500 text-sm mt-2">请选择口味</p>
           </div>
 
           <div v-if="cartMessage" :class="cartMessageType === 'success' ? 'text-green-600' : 'text-red-600'" class="mt-4 text-sm">
@@ -125,33 +126,37 @@ const fetchDishDetails = async () => {
   isLoading.value = true;
   errorMessage.value = '';
   cartMessage.value = '';
+  selectedFlavor.value = null; // 重置口味选择
+  
   try {
     const response = await axios.get(`${API_BASE_URL}/dishes/${dishId.value}`);
+    console.log('API响应:', response.data);
+    
     if (response.data && response.data.code === 0) {
       const fetchedDish = response.data.data;
-      // Parse flavors if they are a JSON string
-      if (typeof fetchedDish.flavors === 'string') {
-        try {
-          fetchedDish.flavors = JSON.parse(fetchedDish.flavors);
-        } catch (e) {
-          console.error('Error parsing flavors:', e);
-          fetchedDish.flavors = []; // Default to empty array on parse error
-        }
+      console.log('获取到的菜品数据:', fetchedDish);
+      
+      // 确保 flavors 是数组
+      if (!Array.isArray(fetchedDish.flavors)) {
+        console.warn('flavors 不是数组，设置为空数组');
+        fetchedDish.flavors = [];
       }
+      
       dish.value = fetchedDish;
-      // If only one flavor, preselect it
-      if (dish.value.flavors && dish.value.flavors.length === 1) {
-        selectedFlavor.value = dish.value.flavors[0];
+      
+      // 如果只有一个口味，自动选择
+      if (fetchedDish.flavors.length === 1) {
+        selectedFlavor.value = fetchedDish.flavors[0];
+        console.log('自动选择口味:', selectedFlavor.value);
       }
-
     } else {
       throw new Error(response.data.message || '获取菜品详情失败');
     }
   } catch (error) {
-    console.error(`Error fetching dish ${dishId.value}:`, error);
+    console.error('获取菜品详情失败:', error);
     errorMessage.value = error.response?.data?.message || error.message || '无法加载菜品信息，请稍后再试。';
     if (error.response?.status === 404) {
-        errorMessage.value = `菜品 (ID: ${dishId.value}) 未找到。`;
+      errorMessage.value = `菜品 (ID: ${dishId.value}) 未找到。`;
     }
   } finally {
     isLoading.value = false;
@@ -165,6 +170,12 @@ onMounted(() => {
 const incrementQuantity = () => { quantity.value++; };
 const decrementQuantity = () => { 
   if (quantity.value > 1) quantity.value--; 
+};
+
+// 修改口味选择函数
+const selectFlavor = (flavor) => {
+  console.log('选择口味:', flavor);
+  selectedFlavor.value = flavor;
 };
 
 const handleAddToCart = async () => {
@@ -182,13 +193,11 @@ const handleAddToCart = async () => {
   isAddingToCart.value = true;
   cartMessage.value = '';
 
-  const DUMMY_USER_ID = "1";
   const payload = {
-    user_id: DUMMY_USER_ID,
     item_id: dish.value.id,
     item_type: 'dish',
     quantity: quantity.value,
-    selected_flavors: selectedFlavor.value ? [selectedFlavor.value] : [], // Backend expects an array
+    selected_flavors: selectedFlavor.value ? [selectedFlavor.value] : null
   };
 
   try {
@@ -197,9 +206,8 @@ const handleAddToCart = async () => {
       cartMessage.value = `"${dish.value.name}" 已成功添加到购物车！`;
       cartMessageType.value = 'success';
       // Optionally, reset quantity and flavor after adding
-      // quantity.value = 1;
-      // selectedFlavor.value = null;
-      // router.push('/cart'); // Or provide a link/button to cart
+      quantity.value = 1;
+      selectedFlavor.value = null;
     } else {
       throw new Error(response.data.message || '添加到购物车失败');
     }
@@ -228,4 +236,4 @@ const handleAddToCart = async () => {
   -webkit-appearance: none;
   margin: 0;
 }
-</style> 
+</style>

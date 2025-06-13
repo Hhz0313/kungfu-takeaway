@@ -40,12 +40,8 @@ app.use((err, req, res, next) => {
 });
 
 // Initialize Data Files and Start Server
-const { initializeDataFiles } = require('./utils/db');
-
-app.listen(PORT, async () => {
-  await initializeDataFiles();
+app.listen(PORT, () => {
   console.log(`Backend server is running on http://localhost:${PORT}`);
-  console.log(`Data is stored in JSON files in the /backend/models directory.`);
 });
 
 module.exports = app; 

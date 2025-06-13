@@ -145,7 +145,7 @@
                     </div>
                     <div class="sm:col-span-1">
                       <label for="dishPrice" class="block text-sm font-medium text-slate-700">价格 <span class="text-red-500">*</span></label>
-                      <input type="number" v-model.number="currentDish.price" id="dishPrice" required min="0.01" step="0.01" class="mt-1 input-field" placeholder="例如：15.00"/>
+                      <input type="number" v-model.number="currentDish.price" id="dishPrice" required min="0" step="0.5" class="mt-1 input-field" placeholder="例如：15.00"/>
                     </div>
                     <div class="sm:col-span-2">
                       <label for="dishDescription" class="block text-sm font-medium text-slate-700">描述</label>
@@ -234,9 +234,16 @@ const currentDish = ref({
 const selectedImageFile = ref(null);
 const imagePreviewUrl = ref(null);
 
+// 管理端口味输入校验：自动用逗号分割，防止录入“微辣，中辣”变成一个整体
 const flavorsInput = computed({
   get: () => currentDish.value.flavors ? currentDish.value.flavors.join(', ') : '',
   set: (val) => {
+    // 只允许逗号分割，自动替换其他分隔符为英文逗号
+    if (typeof val === 'string') {
+      // 替换中文逗号、分号、顿号、句号为空格或英文逗号
+      val = val.replace(/[，;；、。\.]/g, ',');
+    }
+    // 检查是否有连续逗号，去除多余空格
     currentDish.value.flavors = val.split(',').map(s => s.trim()).filter(s => s);
   }
 });
@@ -456,10 +463,11 @@ const confirmDeleteDish = async (dishId) => {
         successMessage.value = '菜品删除成功！';
         await fetchInitialData(); // Refresh list
       } else {
-        throw new Error(response.data.message || '删除菜品失败');
+        // 新增：后端已返回错误，优先展示后端返回的 message
+        errorMessage.value = response.data.message || '删除菜品失败';
       }
     } catch (error) {
-      console.error('Error deleting dish:', error);
+      // 新增：后端已返回错误，优先展示后端返回的 message
       errorMessage.value = error.response?.data?.message || error.message || '删除失败，请重试。';
     } finally {
       isSubmitting.value = false;
