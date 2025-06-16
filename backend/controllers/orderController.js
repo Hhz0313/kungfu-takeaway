@@ -1,7 +1,6 @@
 const db = require('../utils/db');
 const { successResponse, errorResponse } = require('../utils/responseUtil');
-
-const DUMMY_USER_ID = "1";
+const knex = require('../utils/knex');
 
 /**
  * @desc    创建新订单 (从购物车)
@@ -9,80 +8,105 @@ const DUMMY_USER_ID = "1";
  * @body    { address_id, payment_method, notes (optional) }
  */
 const createOrder = async (req, res) => {
-  const userId = DUMMY_USER_ID;
-  const { address_id, payment_method, notes } = req.body;
-  if (!address_id || !payment_method) {
-    return errorResponse(res, 400, '收货地址和支付方式为必填项');
+  const userId = req.user.id;
+  const { addressId, paymentMethod, remark } = req.body;
+
+  if (!addressId || !paymentMethod) {
+    return res.status(400).json({ message: '收货地址和支付方式为必填项' });
   }
+
   try {
-    const address = await db.getAddressById(address_id);
-    if (!address || address.user_id !== userId) {
-      return errorResponse(res, 404, '无效的收货地址或地址不属于当前用户');
-    }
-    const cartItems = await db.getCartItems(userId);
-    if (!cartItems || cartItems.length === 0) {
-      return errorResponse(res, 400, '购物车为空，无法创建订单');
-    }
-    let totalAmount = 0;
-    const orderItemsData = [];
-    for (const item of cartItems) {
-      let productDetails = null;
-      let unitPrice = 0;
-      let isAvailable = false;
-      if (item.item_type === 'dish') {
-        productDetails = await db.getDishById(item.item_id);
-        if (productDetails && productDetails.is_available) {
-          unitPrice = productDetails.price;
-          isAvailable = true;
-        }
-      } else if (item.item_type === 'combo') {
-        productDetails = await db.getComboById(item.item_id);
-        if (productDetails && productDetails.is_enabled) {
-          unitPrice = productDetails.price;
-          isAvailable = true;
-        }
+    const trx = await knex.transaction();
+
+    try {
+      // 1. 验证地址
+      const address = await trx('addresses').where({ id: addressId, user_id: userId }).first();
+      if (!address) {
+        throw new Error('无效的收货地址');
       }
-      if (!isAvailable || !productDetails) {
-        return errorResponse(res, 400, `购物车中的商品ID ${item.item_id} (${item.item_type}) 已下架或信息错误，请先移除`);
+
+      // 2. 获取购物车商品
+      const cartItems = await trx('cart_items').where({ user_id: userId });
+      if (cartItems.length === 0) {
+        throw new Error('购物车为空');
       }
-      const subTotal = parseFloat(unitPrice) * parseInt(item.quantity);
-      totalAmount += subTotal;
-      orderItemsData.push({
-        id: db.generateId(),
-        item_type: item.item_type,
-        item_id: item.item_id,
-        quantity: parseInt(item.quantity),
-        unit_price: parseFloat(unitPrice),
-        sub_total: parseFloat(subTotal.toFixed(2)),
-        flavor: item.flavor || null,
+
+      // 3. 计算总价并准备订单项
+      let totalAmount = 0;
+      const orderItemsData = [];
+      for (const item of cartItems) {
+        let details, price;
+        if (item.dish_id) {
+          details = await trx('dishes').where({ id: item.dish_id }).first();
+          price = details?.is_available ? details.price : null;
+        } else {
+          details = await trx('combos').where({ id: item.combo_id }).first();
+          price = details?.is_enabled ? details.price : null;
+        }
+
+        if (!price) {
+          throw new Error(`商品 ${details?.name || 'ID:'+ (item.dish_id || item.combo_id)} 已下架`);
+        }
+        
+        totalAmount += price * item.quantity;
+        orderItemsData.push({
+          order_id: null, // to be set later
+          dish_id: item.dish_id,
+          combo_id: item.combo_id,
+          quantity: item.quantity,
+          price: price,
+          selected_flavors: item.selected_flavors,
+        });
+      }
+
+      totalAmount = parseFloat(totalAmount.toFixed(2));
+      let paymentStatus = 'unpaid';
+      let orderStatus = 'pending';
+
+      // 4. 处理余额支付
+      if (paymentMethod === 'balance') {
+        const user = await trx('users').where({ id: userId }).first();
+        if (user.balance < totalAmount) {
+          throw new Error('账户余额不足');
+        }
+        await trx('users').where({ id: userId }).decrement('balance', totalAmount);
+        paymentStatus = 'paid';
+        orderStatus = 'preparing'; // 已支付，直接进入准备中状态
+      }
+
+      // 5. 创建订单
+      const orderId = require('uuid').v4();
+      await trx('orders').insert({
+        id: orderId,
+        user_id: userId,
+        address_id: addressId,
+        total_amount: totalAmount,
+        status: orderStatus,
+        payment_status: paymentStatus,
+        payment_method: paymentMethod,
+        remark: remark,
       });
+
+      // 6. 插入订单项
+      for (const item of orderItemsData) {
+        item.order_id = orderId;
+      }
+      await trx('order_items').insert(orderItemsData);
+
+      // 7. 清空购物车
+      await trx('cart_items').where({ user_id: userId }).del();
+
+      // 提交事务
+      await trx.commit();
+      
+      res.status(201).json({ message: '订单创建成功', orderId: orderId });
+
+    } catch (error) {
+      await trx.rollback();
+      res.status(400).json({ message: error.message || '订单创建失败' });
     }
-    totalAmount = parseFloat(totalAmount.toFixed(2));
-    const newOrderId = db.generateId();
-    const newOrder = {
-      id: newOrderId,
-      user_id: userId,
-      address_id,
-      total_amount: totalAmount,
-      payment_method,
-      notes: notes || null,
-      status: 'pending',
-      payment_status: 'unpaid',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    await db.getAllOrders().then(async all => {
-      await require('../utils/knex')('orders').insert(newOrder);
-    });
-    for (const item of orderItemsData) {
-      item.order_id = newOrderId;
-      await require('../utils/knex')('order_items').insert(item);
-    }
-    await db.clearCart(userId);
-    successResponse(res, { order_id: newOrderId, total_amount: totalAmount, status: 'pending', payment_status: 'unpaid' }, '订单创建成功，等待支付');
   } catch (error) {
-    console.error('创建订单失败:', error.message);
-    errorResponse(res, 500, '服务器错误: 创建订单失败');
+    res.status(500).json({ message: '服务器错误', error });
   }
 };
 
@@ -91,13 +115,13 @@ const createOrder = async (req, res) => {
  * @route   POST /api/orders/:order_id/pay/success
  */
 const simulatePaymentSuccess = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   const { order_id } = req.params;
   try {
-    const order = await require('../utils/knex')('orders').where({ id: order_id, user_id: userId }).first();
+    const order = await knex('orders').where({ id: order_id, user_id: userId }).first();
     if (!order) return errorResponse(res, 404, '订单未找到或不属于当前用户');
     if (order.payment_status === 'paid') return errorResponse(res, 400, '订单已支付');
-    await require('../utils/knex')('orders').where({ id: order_id }).update({ payment_status: 'paid', status: 'confirmed', updated_at: new Date().toISOString() });
+    await knex('orders').where({ id: order_id }).update({ payment_status: 'paid', status: 'confirmed', updated_at: new Date().toISOString() });
     successResponse(res, { order_id, payment_status: 'paid', status: 'confirmed' }, '支付成功，订单已确认');
   } catch (error) {
     console.error('模拟支付成功失败:', error.message);
@@ -110,12 +134,12 @@ const simulatePaymentSuccess = async (req, res) => {
  * @route   POST /api/orders/:order_id/pay/failure
  */
 const simulatePaymentFailure = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   const { order_id } = req.params;
   try {
-    const order = await require('../utils/knex')('orders').where({ id: order_id, user_id: userId }).first();
+    const order = await knex('orders').where({ id: order_id, user_id: userId }).first();
     if (!order) return errorResponse(res, 404, '订单未找到或不属于当前用户');
-    await require('../utils/knex')('orders').where({ id: order_id }).update({ payment_status: 'failed', updated_at: new Date().toISOString() });
+    await knex('orders').where({ id: order_id }).update({ payment_status: 'failed', updated_at: new Date().toISOString() });
     successResponse(res, { order_id, payment_status: 'failed' }, '支付失败');
   } catch (error) {
     console.error('模拟支付失败处理失败:', error.message);
@@ -128,9 +152,9 @@ const simulatePaymentFailure = async (req, res) => {
  * @route   GET /api/orders/history
  */
 const getOrderHistory = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   try {
-    let orders = await require('../utils/knex')('orders').where({ user_id: userId }).select();
+    let orders = await knex('orders').where({ user_id: userId }).select();
     orders = orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     successResponse(res, orders);
   } catch (error) {
@@ -144,33 +168,36 @@ const getOrderHistory = async (req, res) => {
  * @route   GET /api/orders/:order_id
  */
 const getOrderDetails = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   const { order_id } = req.params;
   try {
-    const order = await require('../utils/knex')('orders').where({ id: order_id, user_id: userId }).first();
+    const order = await knex('orders').where({ id: order_id, user_id: userId }).first();
     if (!order) return errorResponse(res, 404, '订单未找到或不属于当前用户');
-    let orderItems = await require('../utils/knex')('order_items').where({ order_id }).select();
-    for (let i = 0; i < orderItems.length; i++) {
-      let item = orderItems[i];
-      let productDetails = null;
-      let itemName = '商品信息缺失';
-      let itemImageUrl = null;
-      if (item.item_type === 'dish') {
-        productDetails = await db.getDishById(item.item_id);
-        if (productDetails) {
-          itemName = productDetails.name;
-          itemImageUrl = productDetails.image_url;
+    
+    let orderItems = await knex('order_items').where({ order_id }).select();
+
+    // Fetch details for all items in parallel for better performance
+    const dishIds = orderItems.filter(item => item.dish_id).map(item => item.dish_id);
+    const comboIds = orderItems.filter(item => item.combo_id).map(item => item.combo_id);
+
+    const dishes = dishIds.length ? await knex('dishes').whereIn('id', dishIds) : [];
+    const combos = comboIds.length ? await knex('combos').whereIn('id', comboIds) : [];
+
+    orderItems = orderItems.map(item => {
+        let productDetails = null;
+        if (item.dish_id) {
+            productDetails = dishes.find(d => d.id === item.dish_id);
+        } else if (item.combo_id) {
+            productDetails = combos.find(c => c.id === item.combo_id);
         }
-      } else if (item.item_type === 'combo') {
-        productDetails = await db.getComboById(item.item_id);
-        if (productDetails) {
-          itemName = productDetails.name;
-          itemImageUrl = productDetails.image_url;
-        }
-      }
-      orderItems[i] = { ...item, item_name: itemName, item_image_url: itemImageUrl };
-    }
-    const shippingAddress = await db.getAddressById(order.address_id);
+        return { 
+            ...item, 
+            name: productDetails?.name || '商品信息缺失', 
+            image_url: productDetails?.image_url || null 
+        };
+    });
+
+    const shippingAddress = await knex('addresses').where({ id: order.address_id }).first();
     successResponse(res, { ...order, items: orderItems, shipping_address: shippingAddress });
   } catch (error) {
     console.error('获取订单详情失败:', error.message);
@@ -183,16 +210,16 @@ const getOrderDetails = async (req, res) => {
  * @route   GET /api/orders/admin/all
  * @query   status (optional) - 按状态筛选订单
  */
-const getAllOrdersAdmin = async (req, res) => {
+const getAllOrders = async (req, res) => {
   const { status } = req.query;
   try {
-    let orders = status ? await require('../utils/knex')('orders').where({ status }).select() : await require('../utils/knex')('orders').select();
+    let orders = status ? await knex('orders').where({ status }).select() : await knex('orders').select();
     orders = orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const allUsers = await require('../utils/knex')('users').select();
-    const allAddresses = await require('../utils/knex')('addresses').select();
-    const allOrderItems = await require('../utils/knex')('order_items').select();
-    const allDishes = await require('../utils/knex')('dishes').select();
-    const allCombos = await require('../utils/knex')('combos').select();
+    const allUsers = await knex('users').select();
+    const allAddresses = await knex('addresses').select();
+    const allOrderItems = await knex('order_items').select();
+    const allDishes = await knex('dishes').select();
+    const allCombos = await knex('combos').select();
     const processedOrders = orders.map(order => {
       const customer = allUsers.find(u => u.id === order.user_id) || { username: '未知用户' };
       const address = allAddresses.find(a => a.id === order.address_id) || { recipient_name: 'N/A', phone_number: 'N/A', address_line1: 'N/A' };
@@ -225,25 +252,55 @@ const getAllOrdersAdmin = async (req, res) => {
 };
 
 /**
- * @desc    更新订单状态 (管理员/员工)
- * @route   PUT /api/orders/admin/:order_id/status
- * @body    { status } - 新的订单状态 ('confirmed', 'preparing', 'delivering', 'completed', 'cancelled')
+ * @desc    更新订单状态 (管理员)
+ * @route   PUT /api/orders/admin/:order_id
+ * @body    { status }
  */
-const updateOrderStatusAdmin = async (req, res) => {
+const updateOrderStatus = async (req, res) => {
   const { order_id } = req.params;
   const { status } = req.body;
-  const validStatuses = ['pending', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled'];
-  if (!status || !validStatuses.includes(status)) {
-    return errorResponse(res, 400, `无效的订单状态，必须是以下之一: ${validStatuses.join(', ')}`);
+  const validStatuses = ['pending', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled', 'refunded'];
+  if (!validStatuses.includes(status)) {
+    return errorResponse(res, 400, '无效的订单状态');
   }
   try {
-    const order = await require('../utils/knex')('orders').where({ id: order_id }).first();
-    if (!order) return errorResponse(res, 404, '订单未找到');
-    await require('../utils/knex')('orders').where({ id: order_id }).update({ status, updated_at: new Date().toISOString() });
+    const updated = await knex('orders').where({ id: order_id }).update({ status, updated_at: new Date().toISOString() });
+    if (updated === 0) return errorResponse(res, 404, '订单未找到');
     successResponse(res, { order_id, status }, '订单状态更新成功');
   } catch (error) {
-    console.error('管理员更新订单状态失败:', error.message);
-    errorResponse(res, 500, '服务器错误: 管理员更新订单状态失败');
+    console.error('更新订单状态失败:', error.message);
+    errorResponse(res, 500, '服务器错误: 更新订单状态失败');
+  }
+};
+
+/**
+ * @desc    删除订单 (管理员)
+ * @route   DELETE /api/orders/admin/:order_id
+ */
+const deleteOrder = async (req, res) => {
+  const { order_id } = req.params;
+  try {
+    const trx = await knex.transaction();
+    try {
+      // First, delete related order items
+      await trx('order_items').where({ order_id }).del();
+      // Then, delete the order itself
+      const deleted = await trx('orders').where({ id: order_id }).del();
+      
+      if (deleted === 0) {
+        await trx.rollback();
+        return errorResponse(res, 404, '订单未找到');
+      }
+
+      await trx.commit();
+      successResponse(res, null, '订单删除成功');
+    } catch (error) {
+      await trx.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error('删除订单失败:', error.message);
+    errorResponse(res, 500, '服务器错误: 删除订单失败');
   }
 };
 
@@ -253,6 +310,7 @@ module.exports = {
   simulatePaymentFailure,
   getOrderHistory,
   getOrderDetails,
-  getAllOrdersAdmin,
-  updateOrderStatusAdmin,
+  getAllOrders,
+  updateOrderStatus,
+  deleteOrder,
 };

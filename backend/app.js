@@ -22,6 +22,8 @@ const cartRoutes = require('./routes/cartRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const statisticsRoutes = require('./routes/statisticsRoutes');
 const configRoutes = require('./routes/configRoutes');
+const userRoutes = require('./routes/userRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 // API Routes
 app.use('/api/categories', categoryRoutes);
@@ -32,6 +34,8 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/statistics', statisticsRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Global error handler (Simplified example)
 app.use((err, req, res, next) => {

@@ -58,6 +58,14 @@ async function init() {
       table.string('role').defaultTo('customer'); // customer, admin
       table.string('phone_number');
       table.string('email');
+      
+      // New user profile fields
+      table.string('gender').nullable(); // e.g., 'male', 'female', 'other'
+      table.date('birth_date').nullable();
+      table.text('bio').nullable(); // For personal signature
+      table.text('food_tags').nullable(); // For food preference tags, stored as JSON or CSV
+      table.decimal('balance', 10, 2).defaultTo(0.00); // For wallet balance
+
       table.boolean('is_active').defaultTo(true);
       table.timestamp('created_at').defaultTo(knex.fn.now());
       table.timestamp('updated_at').defaultTo(knex.fn.now());
