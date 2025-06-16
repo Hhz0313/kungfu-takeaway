@@ -248,57 +248,57 @@ const handleSubmit = async () => {
 
   try {
     let response;
-    const payload = {
-      name: currentCategory.value.name,
-      description: currentCategory.value.description,
-      is_enabled: currentCategory.value.is_enabled,
-    };
+    const url = isEditing.value
+      ? `${API_BASE_URL}/categories/admin/${currentCategory.value.id}`
+      : `${API_BASE_URL}/categories/admin`;
+    
+    const method = isEditing.value ? 'put' : 'post';
 
-    if (isEditing.value) {
-      response = await axios.put(`${API_BASE_URL}/categories/${currentCategory.value.id}`, payload);
-    } else {
-      response = await axios.post(`${API_BASE_URL}/categories`, payload);
-    }
+    response = await axios[method](url, currentCategory.value);
 
     if (response.data && response.data.code === 0) {
       successMessage.value = isEditing.value ? '分类更新成功！' : '分类添加成功！';
       closeModal();
       await fetchCategories(); // Refresh the list
     } else {
-      throw new Error(response.data.message || (isEditing.value ? '更新分类失败' : '添加分类失败'));
+      throw new Error(response.data.message || '操作失败');
     }
   } catch (error) {
     console.error('Error submitting category:', error);
     errorMessage.value = error.response?.data?.message || error.message || '操作失败，请重试。';
   } finally {
-    isLoading.value = originalIsLoading; // Restore original loading state only if it wasn't already true
+    isLoading.value = originalIsLoading; // Restore original loading state
+    setTimeout(clearMessages, 3000);
   }
 };
 
 const toggleCategoryStatus = async (category) => {
   clearMessages();
-  const newStatus = !category.is_enabled;
-  const actionText = newStatus ? '启用' : '禁用';
-
-  const originalIsEnabled = category.is_enabled;
-  category.is_enabled = newStatus;
+  const originalStatus = category.is_enabled;
+  const optimisticUpdatedCategories = categories.value.map(c =>
+    c.id === category.id ? { ...c, is_enabled: !c.is_enabled } : c
+  );
+  categories.value = optimisticUpdatedCategories;
 
   try {
-    const response = await axios.put(`${API_BASE_URL}/categories/${category.id}`, {
-      name: category.name,
-      description: category.description,
-      is_enabled: newStatus
+    const response = await axios.put(`${API_BASE_URL}/categories/admin/${category.id}`, {
+      ...category,
+      is_enabled: !originalStatus,
     });
+
     if (response.data && response.data.code === 0) {
-      successMessage.value = `分类 "${category.name}" 已成功${actionText}。`;
+      successMessage.value = `分类 "${category.name}" 状态已更新。`;
     } else {
-      category.is_enabled = originalIsEnabled;
-      throw new Error(response.data.message || `切换分类状态失败`);
+      throw new Error(response.data.message || '状态更新失败');
     }
   } catch (error) {
-    category.is_enabled = originalIsEnabled;
     console.error('Error toggling category status:', error);
-    errorMessage.value = error.response?.data?.message || error.message || `操作失败，无法${actionText}分类。`;
+    errorMessage.value = `无法更新分类 "${category.name}" 的状态。请刷新后重试。`;
+    categories.value = categories.value.map(c =>
+      c.id === category.id ? { ...c, is_enabled: originalStatus } : c
+    );
+  } finally {
+    setTimeout(clearMessages, 3000);
   }
 };
 </script>

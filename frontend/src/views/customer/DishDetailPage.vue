@@ -8,7 +8,7 @@
     <div v-else-if="errorMessage" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-6 rounded-md shadow-md" role="alert">
       <h2 class="font-bold text-lg mb-2">加载错误</h2>
       <p>{{ errorMessage }}</p>
-      <router-link to="/menu" class="mt-4 inline-block text-blue-600 hover:underline">返回菜单</router-link>
+      <router-link to="/home/menu" class="mt-4 inline-block text-blue-600 hover:underline">返回菜单</router-link>
     </div>
 
     <div v-else-if="dish" class="bg-white shadow-xl rounded-lg overflow-hidden">
@@ -83,12 +83,20 @@
           </div>
 
           <div class="mt-8">
-            <router-link to="/menu" class="text-blue-600 hover:text-blue-800 hover:underline">&larr; 返回菜单</router-link>
-            <router-link v-if="cartMessageType === 'success'" to="/cart" class="ml-4 text-green-600 hover:text-green-800 hover:underline font-semibold">去购物车 &rarr;</router-link>
+            <router-link :to="{ name: 'MenuPage' }" class="text-blue-600 hover:text-blue-800 hover:underline">&larr; 返回菜单</router-link>
+            <router-link v-if="cartMessageType === 'success'" to="/home/cart" class="ml-4 text-green-600 hover:text-green-800 hover:underline font-semibold">去购物车 &rarr;</router-link>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Fallback/Error -->
+    <template v-else>
+      <div class="text-center py-20">
+        <p class="text-xl text-gray-700 mb-4">无法加载菜品信息。</p>
+        <router-link to="/home/menu" class="mt-4 inline-block text-blue-600 hover:underline">返回菜单</router-link>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -179,15 +187,14 @@ const selectFlavor = (flavor) => {
 };
 
 const handleAddToCart = async () => {
-  if (!dish.value || !dish.value.is_available) {
-    cartMessage.value = '该菜品当前不可购买。';
-    cartMessageType.value = 'error';
-    return;
-  }
+  if (!dish.value) return;
+
+  // Validate that a flavor is selected if flavors are available
   if (dish.value.flavors && dish.value.flavors.length > 0 && !selectedFlavor.value) {
-    cartMessage.value = '请先选择口味。';
-    cartMessageType.value = 'error';
-    return;
+      cartMessage.value = '请先选择一个口味';
+      cartMessageType.value = 'error';
+      setTimeout(() => { cartMessage.value = '' }, 3000);
+      return;
   }
 
   isAddingToCart.value = true;
@@ -197,23 +204,34 @@ const handleAddToCart = async () => {
     item_id: dish.value.id,
     item_type: 'dish',
     quantity: quantity.value,
-    selected_flavors: selectedFlavor.value ? [selectedFlavor.value] : null
+    // Use the correct variable 'selectedFlavor' and format it as the backend expects: an array of objects.
+    // Since there's only one flavor selection, the array will have one item.
+    selected_flavors: selectedFlavor.value ? [{ name: dish.value.flavor_name || '口味', value: selectedFlavor.value }] : []
   };
 
   try {
-    const response = await axios.post(`${API_BASE_URL}/cart`, payload);
+    const response = await axios.post('/api/cart', payload);
+    console.log('API响应:', response.data);
+    
     if (response.data && response.data.code === 0) {
-      cartMessage.value = `"${dish.value.name}" 已成功添加到购物车！`;
+      const addedItem = response.data.data;
+      console.log('添加到购物车的菜品数据:', addedItem);
+      
+      cartMessage.value = `"${addedItem.name}" 已成功添加到购物车！`;
       cartMessageType.value = 'success';
-      // Optionally, reset quantity and flavor after adding
-      quantity.value = 1;
-      selectedFlavor.value = null;
+      
+      // Optionally redirect or update UI
+      setTimeout(() => {
+        cartMessage.value = '';
+      }, 3000);
     } else {
-      throw new Error(response.data.message || '添加到购物车失败');
+      // Handle cases where item is added but maybe with a notice
+      cartMessage.value = response.data.message || '已添加到购物车';
+      cartMessageType.value = 'success';
     }
-  } catch (error) {
-    console.error('Error adding to cart:', error);
-    cartMessage.value = `添加失败: ${error.response?.data?.message || error.message}`;
+  } catch (err) {
+    console.error('添加到购物车失败:', err);
+    cartMessage.value = err.response?.data?.message || '添加失败，请稍后重试';
     cartMessageType.value = 'error';
   } finally {
     isAddingToCart.value = false;

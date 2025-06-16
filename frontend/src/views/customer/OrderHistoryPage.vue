@@ -13,11 +13,10 @@
     </div>
 
     <div v-else-if="orders.length === 0">
-      <div class="text-center py-12 bg-white shadow-md rounded-lg">
-        <svg class="mx-auto h-24 w-24 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-        <p class="mt-6 text-xl font-semibold text-gray-700">您还没有下过订单</p>
-        <p class="mt-2 text-gray-500">快去菜单看看有什么好吃的吧！</p>
-        <router-link to="/menu" class="mt-8 inline-block btn-primary">
+      <div class="text-center py-20">
+        <h2 class="text-2xl font-semibold mb-4 text-gray-700">您还没有任何订单</h2>
+        <p class="text-gray-500 mb-8">快去菜单看看有什么好吃的吧！</p>
+        <router-link to="/home/menu" class="mt-8 inline-block btn-primary">
           去点餐
         </router-link>
       </div>
@@ -30,7 +29,7 @@
             <p class="text-xs text-gray-500">订单号:</p>
             <p class="font-mono text-sm text-gray-700 tracking-wide">{{ order.id }}</p>
           </div>
-          <p class="text-sm text-gray-500 mt-2 sm:mt-0">{{ new Date(order.created_at).toLocaleString() }}</p>
+          <p class="text-sm text-gray-500 mt-2 sm:mt-0">{{ formatTimeInChina(order.created_at) }}</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 items-center">
@@ -46,24 +45,13 @@
             </div>
              <div>
                 <p class="text-xs text-gray-500">支付状态</p>
-                <span :class="order.payment_status === 'Paid' ? 'text-green-700' : 'text-orange-600'" class="text-sm">
+                <span :class="order.payment_status === 'paid' ? 'text-green-700' : 'text-orange-600'" class="text-sm font-semibold">
                   {{ translatePaymentStatus(order.payment_status) }}
                 </span>
             </div>
         </div>
         
-        <!-- Quick summary of items - could be brief -->
-        <div class="mb-4">
-            <p class="text-xs text-gray-500 mb-1">订单内容 ({{order.items.length}}项):</p>
-            <div class="text-sm text-gray-600 space-y-0.5">
-                <div v-for="item in order.items.slice(0, 2)" :key="item.id">
-                    {{ item.name }} x {{ item.quantity }}
-                </div>
-                <div v-if="order.items.length > 2" class="italic text-gray-400">
-                    ...等 {{ order.items.length }} 件商品
-                </div>
-            </div>
-        </div>
+        <!-- Removed order items summary as it's not available in history list -->
 
         <div class="text-right mt-4">
           <router-link :to="{ name: 'OrderDetailPage', params: { orderId: order.id } }" class="btn-secondary">
@@ -78,28 +66,26 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
-
-const API_BASE_URL = 'http://localhost:3000/api';
-const DUMMY_USER_ID = "1";
+import { formatTimeInChina } from '@/utils/formatters';
 
 const orders = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref('');
 
 const orderStatusMap = {
-  Pending: '待处理',
-  Processing: '处理中',
-  OutForDelivery: '派送中',
-  Completed: '已完成',
-  Cancelled: '已取消',
-  PaymentFailed: '支付失败'
+  pending: '待处理',
+  preparing: '准备中',
+  'out-for-delivery': '派送中',
+  completed: '已完成',
+  cancelled: '已取消',
+  'payment-failed': '支付失败'
 };
 
 const paymentStatusMap = {
-    Pending: '待支付',
-    Paid: '已支付',
-    Failed: '支付失败',
-    Refunded: '已退款'
+    unpaid: '待支付',
+    paid: '已支付',
+    failed: '支付失败',
+    refunded: '已退款'
 };
 
 const translateOrderStatus = (statusKey) => orderStatusMap[statusKey] || statusKey;
@@ -107,12 +93,12 @@ const translatePaymentStatus = (statusKey) => paymentStatusMap[statusKey] || sta
 
 const getStatusClass = (statusKey) => {
   switch (statusKey) {
-    case 'Pending': return 'bg-yellow-100 text-yellow-800';
-    case 'Processing': return 'bg-blue-100 text-blue-800';
-    case 'OutForDelivery': return 'bg-purple-100 text-purple-800';
-    case 'Completed': return 'bg-green-100 text-green-800';
-    case 'Cancelled': return 'bg-gray-100 text-gray-800';
-    case 'PaymentFailed': return 'bg-red-100 text-red-800';
+    case 'pending': return 'bg-yellow-100 text-yellow-800';
+    case 'preparing': return 'bg-blue-100 text-blue-800';
+    case 'out-for-delivery': return 'bg-purple-100 text-purple-800';
+    case 'completed': return 'bg-green-100 text-green-800';
+    case 'cancelled': return 'bg-gray-100 text-gray-800';
+    case 'payment-failed': return 'bg-red-100 text-red-800';
     default: return 'bg-gray-100 text-gray-700';
   }
 };
@@ -121,8 +107,10 @@ const fetchOrderHistory = async () => {
   isLoading.value = true;
   errorMessage.value = '';
   try {
-    const response = await axios.get(`${API_BASE_URL}/orders/history?user_id=${DUMMY_USER_ID}`);
+    // Correct API call, no dummy ID, relying on auth interceptor
+    const response = await axios.get('/api/orders/history');
     if (response.data && response.data.code === 0) {
+      // The data from history does not contain items, which is correct.
       orders.value = response.data.data;
     } else {
       throw new Error(response.data.message || '获取订单历史失败');
@@ -130,6 +118,7 @@ const fetchOrderHistory = async () => {
   } catch (error) {
     console.error("Error fetching order history:", error);
     errorMessage.value = error.response?.data?.message || error.message || '无法加载订单历史，请稍后再试。';
+    orders.value = []; // Ensure orders is an empty array on error
   } finally {
     isLoading.value = false;
   }
@@ -138,7 +127,7 @@ const fetchOrderHistory = async () => {
 onMounted(fetchOrderHistory);
 
 const sortedOrders = computed(() => {
-  // Sort by creation date, newest first
+  if (!Array.isArray(orders.value)) return [];
   return [...orders.value].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 });
 

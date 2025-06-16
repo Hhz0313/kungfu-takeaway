@@ -6,62 +6,74 @@
         <div class="flex items-center justify-between h-20">
           <!-- Logo/Brand Name -->
           <div class="flex items-center space-x-3 flex-shrink-0">
-            <img src="/images/kungfu-takeaway-logo.png" alt="logo" class="h-12 w-12 rounded-full shadow-lg border-2 border-white bg-white/80 object-cover" />
-            <router-link to="/menu" class="text-3xl font-extrabold tracking-tight hover:opacity-90 transition-opacity drop-shadow-lg">
+            <img src="/logo.png" alt="logo" class="h-12 w-12 rounded-full shadow-lg border-2 border-white bg-white/80 object-cover" />
+            <router-link to="/home/menu" class="text-3xl font-extrabold tracking-tight hover:opacity-90 transition-opacity drop-shadow-lg">
               功夫宅急送
             </router-link>
           </div>
 
           <!-- Desktop Navigation -->
           <nav class="hidden md:flex items-center space-x-2">
-            <router-link to="/menu" class="px-4 py-2 rounded-xl text-base font-semibold text-gray-100 hover:bg-yellow-400 hover:text-red-700 hover:scale-110 shadow-md transition-all duration-200 ease-in-out tracking-wide" active-class="bg-white text-red-700 shadow-xl scale-110 border-2 border-yellow-400">菜单</router-link>
-            <router-link to="/cart" class="px-4 py-2 rounded-xl text-base font-semibold text-gray-100 hover:bg-yellow-400 hover:text-red-700 hover:scale-110 shadow-md transition-all duration-200 ease-in-out tracking-wide" active-class="bg-white text-red-700 shadow-xl scale-110 border-2 border-yellow-400">我的购物车</router-link>
-            <router-link to="/my-orders" class="px-4 py-2 rounded-xl text-base font-semibold text-gray-100 hover:bg-yellow-400 hover:text-red-700 hover:scale-110 shadow-md transition-all duration-200 ease-in-out tracking-wide" active-class="bg-white text-red-700 shadow-xl scale-110 border-2 border-yellow-400">我的订单</router-link>
-            <router-link to="/my-addresses" class="px-4 py-2 rounded-xl text-base font-semibold text-gray-100 hover:bg-yellow-400 hover:text-red-700 hover:scale-110 shadow-md transition-all duration-200 ease-in-out tracking-wide" active-class="bg-white text-red-700 shadow-xl scale-110 border-2 border-yellow-400">地址管理</router-link>
+            <router-link to="/home/menu" class="nav-link" active-class="nav-link-active">菜单</router-link>
+            <router-link to="/home/cart" class="nav-link" active-class="nav-link-active">购物车</router-link>
+            <router-link to="/home/my-orders" class="nav-link" active-class="nav-link-active">我的订单</router-link>
           </nav>
 
-          <!-- 右侧用户区 -->
-          <div class="flex items-center space-x-4">
-            <!-- 搜索框（可选） -->
-            <!-- <input type="text" placeholder="搜索美食..." class="hidden lg:block px-3 py-1 rounded-full bg-white/80 text-gray-700 focus:outline-none focus:ring-2 focus:ring-yellow-400 shadow-inner transition w-40" /> -->
-            <!-- 用户头像/菜单 -->
-            <div class="h-10 w-10 rounded-full bg-gradient-to-br from-yellow-300 to-red-400 flex items-center justify-center shadow-md border-2 border-white cursor-pointer hover:scale-105 transition-transform">
-              <svg class="h-7 w-7 text-white/90" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            </div>
-            <!-- 移动端菜单按钮 -->
-            <div class="md:hidden flex items-center">
-              <button @click="mobileMenuOpen = !mobileMenuOpen" class="inline-flex items-center justify-center p-2 rounded-md text-gray-100 hover:text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white transition-colors">
-                <span class="sr-only">Open main menu</span>
-                <svg v-if="!mobileMenuOpen" class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                <svg v-else class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+          <!-- User Menu -->
+          <div class="flex items-center">
+            <!-- Authenticated User -->
+            <div v-if="user" class="relative" ref="dropdownContainer">
+              <button @click="isDropdownOpen = !isDropdownOpen" class="flex items-center space-x-2 focus:outline-none h-12 w-12 rounded-full bg-gradient-to-br from-yellow-300 to-red-400 justify-center shadow-md border-2 border-white cursor-pointer hover:scale-105 transition-transform">
+                 <svg class="h-7 w-7 text-white/90" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               </button>
+              <transition
+                enter-active-class="transition ease-out duration-100"
+                enter-from-class="transform opacity-0 scale-95"
+                enter-to-class="transform opacity-100 scale-100"
+                leave-active-class="transition ease-in duration-75"
+                leave-from-class="transform opacity-100 scale-100"
+                leave-to-class="transform opacity-0 scale-95"
+              >
+                <div v-show="isDropdownOpen" class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50 text-gray-700">
+                  <div class="px-4 py-3 border-b border-gray-200">
+                    <p class="text-sm">欢迎您</p>
+                    <p class="text-sm font-medium text-gray-900 truncate">{{ user.username }}</p>
+                  </div>
+                  <div class="py-1">
+                    <router-link to="/home/profile" class="dropdown-item">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" /></svg>
+                      个人中心
+                    </router-link>
+                    <router-link to="/home/my-addresses" class="dropdown-item">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
+                      我的地址
+                    </router-link>
+                  </div>
+                  <div class="py-1 border-t border-gray-200">
+                    <a @click="handleLogout" href="#" class="dropdown-item">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd" /></svg>
+                      退出登录
+                    </a>
+                  </div>
+                </div>
+              </transition>
+            </div>
+            <!-- Guest User -->
+            <div v-else>
+              <router-link to="/login" class="nav-link" active-class="nav-link-active">登录 / 注册</router-link>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- Mobile Navigation Menu -->
-      <div v-if="mobileMenuOpen" class="md:hidden bg-gradient-to-r from-red-600/95 to-yellow-500/95 border-t border-red-500 rounded-b-2xl shadow-xl">
-        <nav class="px-2 pt-2 pb-4 space-y-1 sm:px-3">
-          <router-link to="/menu" class="block px-3 py-3 rounded-xl text-lg font-bold text-gray-100 hover:bg-yellow-400 hover:text-red-700 transition-colors duration-150 ease-in-out" active-class="bg-white text-red-700" @click="mobileMenuOpen = false">菜单</router-link>
-          <router-link to="/cart" class="block px-3 py-3 rounded-xl text-lg font-bold text-gray-100 hover:bg-yellow-400 hover:text-red-700 transition-colors duration-150 ease-in-out" active-class="bg-white text-red-700" @click="mobileMenuOpen = false">我的购物车</router-link>
-          <router-link to="/my-orders" class="block px-3 py-3 rounded-xl text-lg font-bold text-gray-100 hover:bg-yellow-400 hover:text-red-700 transition-colors duration-150 ease-in-out" active-class="bg-white text-red-700" @click="mobileMenuOpen = false">我的订单</router-link>
-          <router-link to="/my-addresses" class="block px-3 py-3 rounded-xl text-lg font-bold text-gray-100 hover:bg-yellow-400 hover:text-red-700 transition-colors duration-150 ease-in-out" active-class="bg-white text-red-700" @click="mobileMenuOpen = false">地址管理</router-link>
-        </nav>
-      </div>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 container mx-auto p-4 sm:p-6 lg:p-8 w-full">
-      <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
+    <main class="flex-1">
+       <router-view v-slot="{ Component }">
+         <transition name="fade" mode="out-in">
+           <component :is="Component" />
+         </transition>
+       </router-view>
     </main>
 
     <!-- Footer -->
@@ -73,29 +85,61 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-const mobileMenuOpen = ref(false);
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
+
+const user = ref(null);
+const isDropdownOpen = ref(false);
+const dropdownContainer = ref(null); // Ref for the dropdown container
+const router = useRouter();
+
+const updateUser = () => {
+  const userData = localStorage.getItem('user');
+  user.value = userData ? JSON.parse(userData) : null;
+};
+
+const handleLogout = () => {
+  isDropdownOpen.value = false;
+  localStorage.removeItem('user-token');
+  localStorage.removeItem('user');
+  user.value = null;
+  router.push('/login');
+};
+
+// Close dropdown when clicking outside
+const handleClickOutside = (event) => {
+  if (dropdownContainer.value && !dropdownContainer.value.contains(event.target)) {
+    isDropdownOpen.value = false;
+  }
+};
+
+window.addEventListener('storage', updateUser);
+
+onMounted(() => {
+  updateUser();
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('storage', updateUser);
+  document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 <style scoped>
-header {
-  /* 更强的阴影和圆角 */
-  box-shadow: 0 8px 24px 0 rgba(0,0,0,0.12), 0 1.5px 4px 0 rgba(255,200,0,0.08);
-  border-bottom-left-radius: 1.5rem;
-  border-bottom-right-radius: 1.5rem;
+.nav-link {
+  @apply px-4 py-2 rounded-xl text-base font-semibold text-gray-100 hover:bg-yellow-400 hover:text-red-700 hover:scale-110 shadow-md transition-all duration-200 ease-in-out tracking-wide;
 }
-
-.container {
-  max-width: 1280px;
+.nav-link-active {
+  @apply bg-white text-red-700 shadow-xl scale-110 border-2 border-yellow-400;
 }
-
-.fade-enter-active,
-.fade-leave-active {
+.dropdown-item {
+  @apply flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100;
+}
+.fade-enter-active, .fade-leave-active {
   transition: opacity 0.3s ease;
 }
-
-.fade-enter-from,
-.fade-leave-to {
+.fade-enter-from, .fade-leave-to {
   opacity: 0;
 }
 </style>

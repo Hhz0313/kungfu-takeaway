@@ -65,7 +65,7 @@
           </div>
           <div>
             <p class="text-xs text-slate-500 uppercase tracking-wider">下单时间</p>
-            <p class="text-sm text-slate-700">{{ new Date(order.created_at).toLocaleString() }}</p>
+            <p class="text-sm text-slate-700">{{ formatToBeijingTime(order.created_at) }}</p>
           </div>
           <div>
             <p class="text-xs text-slate-500 uppercase tracking-wider">总金额</p>
@@ -151,6 +151,12 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
@@ -185,6 +191,12 @@ const translateOrderStatus = (statusKey) => {
 
 const translatePaymentStatus = (statusKey) => {
     return paymentStatuses[statusKey] || statusKey;
+};
+
+const formatToBeijingTime = (dateString) => {
+  if (!dateString) return '时间不可用';
+  // Explicitly treat the incoming string as UTC and format it to Beijing time.
+  return dayjs.utc(dateString).tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss');
 };
 
 const getStatusPillClasses = (statusKey) => {
@@ -283,7 +295,6 @@ const toggleOrderItems = (orderId) => {
         expandedOrder.value = orderId;
     }
 }
-
 </script>
 
 <style scoped>

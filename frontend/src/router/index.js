@@ -2,7 +2,13 @@ import { createRouter, createWebHistory } from 'vue-router';
 
 // --- Layouts ---
 import AdminLayout from '../layouts/AdminLayout.vue';
-import CustomerLayout from '../layouts/CustomerLayout.vue'; // Import CustomerLayout
+import CustomerLayout from '../layouts/CustomerLayout.vue';
+
+// --- Auth Pages ---
+import LoginChoicePage from '../views/LoginChoice.vue';
+const LoginPage = () => import('../views/customer/LoginPage.vue');
+const RegisterPage = () => import('../views/customer/RegisterPage.vue');
+const AdminLoginPage = () => import('../views/admin/AdminLoginPage.vue');
 
 // --- Customer Pages (Lazy loaded) ---
 const HomePage = () => import('../views/customer/HomePage.vue');
@@ -14,9 +20,9 @@ const CheckoutPage = () => import('../views/customer/CheckoutPage.vue');
 const OrderSuccessPage = () => import('../views/customer/OrderSuccessPage.vue');
 const OrderHistoryPage = () => import('../views/customer/OrderHistoryPage.vue');
 const OrderDetailPage = () => import('../views/customer/OrderDetailPage.vue');
+const ProfilePage = () => import('../views/customer/ProfilePage.vue');
 
 // --- Admin Pages (Lazy loaded) ---
-const AdminLoginPage = () => import('../views/admin/AdminLoginPage.vue');
 const AdminDashboardPage = () => import('../views/admin/AdminDashboardPage.vue');
 const AdminCategoryPage = () => import('../views/admin/AdminCategoryPage.vue');
 const AdminDishPage = () => import('../views/admin/AdminDishPage.vue');
@@ -25,33 +31,37 @@ const AdminOrderProcessingPage = () => import('../views/admin/AdminOrderProcessi
 const AdminStatisticsPage = () => import('../views/admin/AdminStatisticsPage.vue');
 
 const routes = [
+  // --- Entry and Auth Routes ---
+  { path: '/', name: 'LoginChoice', component: LoginChoicePage },
+  { path: '/login', name: 'Login', component: LoginPage },
+  { path: '/register', name: 'Register', component: RegisterPage },
+  { path: '/admin/login', name: 'AdminLogin', component: AdminLoginPage },
+
   // --- Customer Routes (using CustomerLayout) ---
   {
-    path: '/',
+    path: '/home',
     component: CustomerLayout,
+    redirect: '/home/menu',
     children: [
-      { path: '', name: 'HomePage', component: HomePage }, // HomePage will redirect to MenuPage
+      { path: '', name: 'HomePage', component: HomePage },
       { path: 'menu', name: 'MenuPage', component: MenuPage },
       { path: 'dish/:id', name: 'DishDetailPage', component: DishDetailPage, props: true },
-      { path: 'cart', name: 'CartPage', component: CartPage },
-      { path: 'my-addresses', name: 'AddressPage', component: AddressPage },
-      { path: 'checkout', name: 'CheckoutPage', component: CheckoutPage },
-      { path: 'order-success/:orderId', name: 'OrderSuccessPage', component: OrderSuccessPage, props: true },
-      { path: 'my-orders', name: 'OrderHistoryPage', component: OrderHistoryPage },
-      { path: 'my-orders/:orderId', name: 'OrderDetailPage', component: OrderDetailPage, props: true },
+      { path: 'cart', name: 'CartPage', component: CartPage, meta: { requiresAuth: true } },
+      { path: 'my-addresses', name: 'AddressPage', component: AddressPage, meta: { requiresAuth: true } },
+      { path: 'checkout', name: 'CheckoutPage', component: CheckoutPage, meta: { requiresAuth: true } },
+      { path: 'order-success/:orderId', name: 'OrderSuccessPage', component: OrderSuccessPage, props: true, meta: { requiresAuth: true } },
+      { path: 'my-orders', name: 'OrderHistoryPage', component: OrderHistoryPage, meta: { requiresAuth: true } },
+      { path: 'my-orders/:orderId', name: 'OrderDetailPage', component: OrderDetailPage, props: true, meta: { requiresAuth: true } },
+      { path: 'profile', name: 'ProfilePage', component: ProfilePage, meta: { requiresAuth: true } },
     ]
   },
 
   // --- Admin Routes ---
-  { 
-    path: '/admin/login', 
-    name: 'AdminLogin', 
-    component: AdminLoginPage 
-  },
   {
     path: '/admin',
     component: AdminLayout,
     redirect: '/admin/dashboard',
+    meta: { requiresAdmin: true },
     children: [
       { path: 'dashboard', name: 'AdminDashboard', component: AdminDashboardPage },
       { path: 'categories', name: 'AdminCategoryPage', component: AdminCategoryPage },
@@ -78,22 +88,29 @@ const router = createRouter({
   }
 });
 
-// Navigation Guards (to be implemented later)
-// router.beforeEach((to, from, next) => {
-//   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
-//   const requiresAdminAuth = to.matched.some(record => record.meta.requiresAdminAuth);
-//   const isAuthenticated = false; // Replace with actual auth check
-//   const isAdmin = false; // Replace with actual admin check
+// Navigation Guards
+router.beforeEach((to, from, next) => {
+  const userToken = localStorage.getItem('user-token');
+  const adminToken = localStorage.getItem('admin-token');
 
-//   if (requiresAdminAuth && !isAdmin) {
-//     next({ name: 'AdminLogin' });
-//   } else if (requiresAdminAuth && !isAuthenticated) { // Admin also needs to be authenticated
-//     next({ name: 'AdminLogin' });
-//   } else if (requiresAuth && !isAuthenticated) {
-//     next({ name: 'HomePage' }); // Or a login page for customers
-//   } else {
-//     next();
-//   }
-// });
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+
+  if (requiresAdmin) {
+    if (adminToken) {
+      next();
+    } else {
+      next('/admin/login');
+    }
+  } else if (requiresAuth) {
+    if (userToken) {
+      next();
+    } else {
+      next('/login');
+    }
+  } else {
+    next();
+  }
+});
 
 export default router; 

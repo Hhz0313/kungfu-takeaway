@@ -128,12 +128,9 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
-import { useRouter } from 'vue-router'; // Import useRouter
+import { useRouter } from 'vue-router';
 
-const API_BASE_URL = 'http://localhost:3000/api';
-const UPLOADS_BASE_URL = 'http://localhost:3000/uploads/';
-
-const router = useRouter(); // NEW - Correctly initialized
+const router = useRouter();
 
 const categories = ref([]);
 const allDishes = ref([]); // Store all fetched dishes
@@ -144,30 +141,28 @@ const isLoadingCategories = ref(false);
 const isLoadingCanteens = ref(false); // Loading state for canteens
 const isLoadingItems = ref(false); // Combined loading for dishes and combos
 const itemErrorMessage = ref('');
-const cartSuccessMessage = ref(''); // For add to cart success
 
 const selectedCategoryId = ref(null); // null means all
 const selectedCanteenId = ref(null); // null means all canteens
 
-const getItemImageUrl = (imagePath, type) => {
-  if (!imagePath) return ''; // Return a placeholder image URL or empty string
-  const folder = type === 'dishes' ? 'dishes/' : 'combos/';
-  // Ensure imagePath doesn't already contain the folder, to prevent double 'dishes/dishes/'
-  const imageName = imagePath.includes('/') ? imagePath.split('/').pop() : imagePath;
-  return `${UPLOADS_BASE_URL}${folder}${imageName}`;
+const getItemImageUrl = (imagePath) => {
+  if (!imagePath) return '/placeholder.png';
+  return imagePath.startsWith('http') ? imagePath : `http://localhost:3000${imagePath}`;
 };
 
 const fetchCategories = async () => {
   isLoadingCategories.value = true;
   try {
-    const response = await axios.get(`${API_BASE_URL}/categories`); // Customer endpoint for enabled categories
+    const response = await axios.get('/api/categories');
     if (response.data && response.data.code === 0) {
       categories.value = response.data.data;
     } else {
       console.error('Failed to load categories:', response.data.message);
+      categories.value = [];
     }
   } catch (error) {
     console.error('Error fetching categories:', error);
+    categories.value = [];
   } finally {
     isLoadingCategories.value = false;
   }
@@ -176,20 +171,16 @@ const fetchCategories = async () => {
 const fetchCanteens = async () => {
   isLoadingCanteens.value = true;
   try {
-    const response = await axios.get(`${API_BASE_URL}/config/canteens`); // Changed endpoint
-    // The new endpoint returns an array directly (or an object with a data array if successResponse wraps it)
-    // Assuming successResponse from backend wraps it in { code: 0, data: [...] }
+    const response = await axios.get('/api/config/canteens');
     if (response.data && response.data.code === 0 && Array.isArray(response.data.data)) {
-      // Filter for enabled canteens only for customer view
-      canteens.value = response.data.data.filter(c => c.is_enabled);
-    } else if (Array.isArray(response.data)) { // Fallback if data is directly an array
-      canteens.value = response.data.filter(c => c.is_enabled);
+        canteens.value = response.data.data.filter(c => c.is_enabled);
     } else {
-      console.error('Failed to load canteens:', response.data?.message || 'Unexpected response structure');
-       canteens.value = []; // Ensure it's an empty array on failure to prevent errors
+        console.error('Failed to load canteens:', response.data?.message || 'Unexpected response structure');
+        canteens.value = [];
     }
   } catch (error) {
     console.error('Error fetching canteens:', error);
+    canteens.value = [];
   } finally {
     isLoadingCanteens.value = false;
   }
@@ -199,21 +190,20 @@ const fetchAllMenuItems = async () => {
   isLoadingItems.value = true;
   itemErrorMessage.value = '';
   try {
-    // Construct query parameters for dishes based on selected canteen
     const dishParams = {};
     if (selectedCanteenId.value) {
-        dishParams.canteenId = selectedCanteenId.value;
+      dishParams.canteenId = selectedCanteenId.value;
     }
 
     const [dishesResponse, combosResponse] = await Promise.all([
-      axios.get(`${API_BASE_URL}/dishes`, { params: dishParams }), // Pass canteenId if selected
-      axios.get(`${API_BASE_URL}/combos`)  // Combos are not filtered by canteen for now
+      axios.get('/api/dishes', { params: dishParams }),
+      axios.get('/api/combos')
     ]);
 
     if (dishesResponse.data && dishesResponse.data.code === 0) {
       allDishes.value = dishesResponse.data.data.map(dish => ({
         ...dish,
-        flavors: typeof dish.flavors === 'string' ? JSON.parse(dish.flavors) : (Array.isArray(dish.flavors) ? dish.flavors : [])
+        flavors: Array.isArray(dish.flavors) ? dish.flavors : []
       }));
     } else {
       itemErrorMessage.value += '获取菜品列表失败. ';
@@ -227,19 +217,6 @@ const fetchAllMenuItems = async () => {
 
   } catch (error) {
     console.error('Error fetching menu items:', error);
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      console.error('Error response data:', error.response.data);
-      console.error('Error response status:', error.response.status);
-      console.error('Error response headers:', error.response.headers);
-    } else if (error.request) {
-      // The request was made but no response was received
-      console.error('Error request:', error.request);
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      console.error('Error message:', error.message);
-    }
     itemErrorMessage.value = '加载菜单项目时出错，请稍后再试。';
   } finally {
     isLoadingItems.value = false;
@@ -286,38 +263,33 @@ onMounted(() => {
   fetchAllMenuItems();
 });
 
-// Basic Add to Cart functionality (will be expanded)
+const viewDetails = (item) => {
+  if (item.type === 'dish' || item.type === 'combo') {
+    router.push(`/home/dish/${item.id}`);
+  }
+};
+
 const addToCart = async (item, type) => {
-  // 如果是菜品且有口味，跳转到详情页
-  if (
-    type === 'dish' &&
-    Array.isArray(item.flavors) &&
-    item.flavors.length > 0
-  ) {
-    console.log('菜品有口味，跳转到详情页:', item);
-    router.push({ name: 'DishDetailPage', params: { id: item.id } });
+  // If a dish has flavors, navigate to its detail page for flavor selection.
+  if (type === 'dish' && item.flavors && item.flavors.length > 0) {
+    router.push(`/home/dish/${item.id}`);
     return;
   }
 
-  // 否则直接加入购物车
-  try {
-    const payload = {
-      item_id: item.id,
-      item_type: type,
-      quantity: 1,
-      selected_flavors: null
-    };
+  // For combos or dishes without flavors, add directly to the cart.
+  const payload = {
+    item_id: item.id,
+    item_type: type,
+    quantity: 1, // Default quantity
+    selected_flavors: [] // No flavors for direct add
+  };
 
-    const response = await axios.post(`${API_BASE_URL}/cart`, payload);
-    if (response.data && response.data.code === 0) {
-      console.log('Added to cart:', response.data.data);
-      alert(`${item.name} 已添加到购物车!`);
-    } else {
-      throw new Error(response.data.message || '添加到购物车失败');
-    }
+  try {
+    await axios.post('/api/cart', payload);
+    alert(`"${item.name}" 已成功添加到购物车！`);
   } catch (error) {
-    console.error('Error adding to cart:', error);
-    alert(`添加 ${item.name} 到购物车失败: ${error.response?.data?.message || error.message}`);
+    console.error(`添加到购物车失败 (${item.name}):`, error);
+    alert(`添加 "${item.name}" 失败: ${error.response?.data?.message || error.message}`);
   }
 };
 

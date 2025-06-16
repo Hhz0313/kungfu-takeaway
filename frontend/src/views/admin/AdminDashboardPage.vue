@@ -29,11 +29,12 @@
       </p>
 
       <!-- Optional: Subtle Divider -->
-      <hr class="w-3/4 md:w-1/2 border-gray-500 my-8 opacity-50" />
+      <hr class="w-3/4 md:w-1/2 border-blue-600 my-4 opacity-50" />
 
-      <p class="text-gray-300 text-base">
+      <p class="text-white text-xl">
         管理您的菜品、套餐、订单等。
       </p>
+
     </div>
 
     <!-- Decorative Footer Image/Banner Placeholder (Optional) -->
@@ -62,7 +63,7 @@ const backgroundImage = ref('/images/HIT-campus-background.jpg'); // Path for ba
 /* Additional custom styles if Tailwind classes are not sufficient */
 
 /* Example of a subtle text shadow for better readability on complex backgrounds */
-.text-white, .text-gray-200, .text-gray-300 {
+.text-white, .text-gray-200 {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 

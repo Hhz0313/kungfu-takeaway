@@ -310,9 +310,9 @@ const fetchInitialData = async () => {
                          dish.is_enabled === true || 
                          dish.is_enabled === 1 || 
                          dish.is_enabled === '1' || 
-                         dish.is_enabled === 'true' ||
-                         dish.is_enabled === 'yes' ||
-                         dish.is_enabled === 'Y' ||
+                         dish.is_enabled === 'true' || 
+                         dish.is_enabled === 'yes' || 
+                         dish.is_enabled === 'Y' || 
                          dish.is_enabled === 'y';
 
         console.log(`Converted is_enabled for ${dish.name}:`, {
@@ -448,75 +448,104 @@ const validateForm = () => {
   return isValid;
 };
 
-const handleSubmit = async () => {
-  clearMessagesAndErrors();
-  if (!validateForm()) {
-    return;
+const handleApiSuccess = (response, successMsg) => {
+  if (response.data && response.data.code === 0) {
+    successMessage.value = successMsg;
+    setTimeout(() => { successMessage.value = '' }, 3000);
+  } else {
+    throw new Error(response.data.message || '操作失败');
   }
+};
+
+const handleApiError = (error, defaultMsg) => {
+  console.error('API Error:', error);
+  errorMessage.value = error.response?.data?.message || error.message || defaultMsg;
+  setTimeout(() => { errorMessage.value = '' }, 5000);
+};
+
+const clearMessages = () => {
+  errorMessage.value = '';
+  successMessage.value = '';
+}
+
+const handleSubmit = async () => {
+  if (!validateForm()) return;
+
   isSubmitting.value = true;
+  clearMessages();
+
   const formData = new FormData();
   formData.append('name', currentCombo.value.name);
   formData.append('description', currentCombo.value.description || '');
   formData.append('price', currentCombo.value.price);
-  // 后端实际字段为 is_enabled，前端 is_enabled 需转为 is_enabled
-  formData.append('is_enabled', currentCombo.value.is_enabled ? 1 : 0);
-  formData.append('dishes', JSON.stringify(currentCombo.value.dishes || []));
+  formData.append('is_enabled', currentCombo.value.is_enabled);
+  formData.append('dishes', JSON.stringify(currentCombo.value.dishes));
+
   if (selectedImageFile.value) {
     formData.append('image', selectedImageFile.value);
   }
+
   try {
-    let response;
-    if (isEditing.value) {
-      response = await axios.put(`${API_BASE_URL}/combos/${currentCombo.value.id}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    } else {
-      response = await axios.post(`${API_BASE_URL}/combos`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    }
-    if (response.data && response.data.code === 0) {
-      successMessage.value = isEditing.value ? '套餐更新成功！' : '套餐添加成功！';
-      closeModal();
-      await fetchInitialData(); 
-    } else {
-      throw new Error(response.data.message || (isEditing.value ? '更新套餐失败' : '添加套餐失败'));
-    }
+    const url = isEditing.value
+      ? `${API_BASE_URL}/combos/admin/${currentCombo.value.id}`
+      : `${API_BASE_URL}/combos/admin`;
+    const method = isEditing.value ? 'put' : 'post';
+
+    const response = await axios({
+      method,
+      url,
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    handleApiSuccess(response, isEditing.value ? '套餐更新成功！' : '套餐添加成功！');
+    closeModal();
+    await fetchInitialData();
   } catch (error) {
-    console.error('Error submitting combo:', error);
-    errorMessage.value = error.response?.data?.message || error.message || '操作失败，请重试。';
+    handleApiError(error, '操作失败');
   } finally {
     isSubmitting.value = false;
+  }
+};
+
+const deleteCombo = async (id) => {
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/combos/admin/${id}`);
+    handleApiSuccess(response, '套餐删除成功！');
+    await fetchInitialData();
+  } catch (error) {
+    handleApiError(error, '删除失败');
   }
 };
 
 const toggleAvailability = async (combo) => {
   clearMessagesAndErrors();
   const originalStatus = combo.is_enabled;
-  const newStatus = !combo.is_enabled;
-  const actionText = newStatus ? '上架' : '停售';
-  combo.is_enabled = newStatus;
+  
+  // Optimistic update
+  const comboIndex = combos.value.findIndex(c => c.id === combo.id);
+  if (comboIndex !== -1) {
+    combos.value[comboIndex].is_enabled = !originalStatus;
+  }
+
+  const updatedData = {
+    ...combo,
+    is_enabled: !originalStatus,
+    dishes: JSON.stringify(combo.dishes.map(d => ({ dish_id: d.dish_id, quantity: d.quantity })))
+  };
+
   try {
-    const formData = new FormData();
-    formData.append('name', combo.name);
-    formData.append('price', combo.price);
-    formData.append('description', combo.description || '');
-    formData.append('is_enabled', newStatus ? 1 : 0);
-    formData.append('dishes', JSON.stringify(combo.dishes || []));
-    const response = await axios.put(`${API_BASE_URL}/combos/${combo.id}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+    const response = await axios.put(`${API_BASE_URL}/combos/admin/${combo.id}`, updatedData, {
+      headers: { 'Content-Type': 'application/json' },
     });
-    if (response.data && response.data.code === 0) {
-      successMessage.value = `套餐 "${combo.name}" 已成功${actionText}。`;
-      await fetchInitialData();
-    } else {
-      combo.is_enabled = originalStatus; 
-      throw new Error(response.data.message || `无法${actionText}套餐`);
-    }
+    handleApiSuccess(response, `套餐 "${combo.name}" 状态已更新。`);
+    // On success, we don't need to refetch because of the optimistic update.
   } catch (error) {
-    combo.is_enabled = originalStatus; 
-    console.error(`Error toggling availability for ${combo.name}:`, error);
-    errorMessage.value = error.response?.data?.message || error.message || `操作失败，无法${actionText}套餐。`;
+    // Revert optimistic update on failure
+    if (comboIndex !== -1) {
+      combos.value[comboIndex].is_enabled = originalStatus;
+    }
+    handleApiError(error, `无法更新套餐 "${combo.name}" 的状态。`);
   }
 };
 
@@ -525,16 +554,11 @@ const confirmDeleteCombo = async (comboId) => {
   if (window.confirm('确定要删除这个套餐吗？此操作无法撤销。')) {
     isSubmitting.value = true;
     try {
-      const response = await axios.delete(`${API_BASE_URL}/combos/${comboId}`);
-      if (response.data && response.data.code === 0) {
-        successMessage.value = '套餐删除成功！';
-        await fetchInitialData();
-      } else {
-        throw new Error(response.data.message || '删除套餐失败');
-      }
+      const response = await axios.delete(`${API_BASE_URL}/combos/admin/${comboId}`);
+      handleApiSuccess(response, '套餐删除成功！');
+      await fetchInitialData();
     } catch (error) {
-      console.error('Error deleting combo:', error);
-      errorMessage.value = error.response?.data?.message || error.message || '删除失败，请重试。';
+      handleApiError(error, '删除失败，请重试。');
     } finally {
       isSubmitting.value = false;
     }

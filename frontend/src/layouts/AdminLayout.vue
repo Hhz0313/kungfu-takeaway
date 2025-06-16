@@ -2,9 +2,13 @@
   <div class="flex h-screen bg-gray-100">
     <!-- Sidebar -->
     <aside class="w-64 bg-slate-800 text-slate-100 flex flex-col shadow-lg">
-      <div class="px-6 py-5 border-b border-slate-700">
+      <div class="px-6 py-5 border-b border-slate-700 text-center">
         <h1 class="text-2xl font-bold text-white">功夫宅急送</h1>
         <span class="text-sm text-slate-400">管理后台</span>
+      </div>
+      <div v-if="adminUser" class="p-4 border-b border-slate-700 bg-slate-900/50 text-center">
+        <p class="text-base font-semibold text-white">欢迎, {{ adminUser.username }}</p>
+        <p class="text-xs text-slate-400">很高兴再次见到您</p>
       </div>
       <nav class="flex-1 mt-6 px-3 space-y-1.5">
         <router-link
@@ -69,16 +73,17 @@
           营业统计
         </router-link>
       </nav>
-      <div class="mt-auto p-4 border-t border-slate-700">
-        <router-link
-            to="/"
-            class="nav-link text-sm hover:bg-slate-700 focus:bg-slate-600"
+      <!-- Logout Button -->
+      <div class="px-4 py-4">
+        <button 
+          @click="handleLogout"
+          class="w-full flex items-center justify-center px-4 py-2 rounded-md text-white bg-orange-600 hover:bg-orange-700"
         >
-         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd" />
-         </svg>
-          返回用户端
-        </router-link>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd" />
+          </svg>
+          退出登录
+        </button>
       </div>
     </aside>
 
@@ -90,8 +95,27 @@
 </template>
 
 <script setup>
-// No specific script needed for the layout itself,
-// interactivity comes from router-link and router-view
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+const adminUser = ref(null);
+
+onMounted(() => {
+  const userData = localStorage.getItem('admin-user');
+  if (userData) {
+    adminUser.value = JSON.parse(userData);
+  }
+});
+
+const handleLogout = () => {
+  // Clear admin data from localStorage
+  localStorage.removeItem('admin-token');
+  localStorage.removeItem('admin-user');
+  
+  // Redirect to the admin login page
+  router.push('/admin/login');
+};
 </script>
 
 <style scoped>

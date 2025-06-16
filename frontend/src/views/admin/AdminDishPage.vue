@@ -234,7 +234,7 @@ const currentDish = ref({
 const selectedImageFile = ref(null);
 const imagePreviewUrl = ref(null);
 
-// 管理端口味输入校验：自动用逗号分割，防止录入“微辣，中辣”变成一个整体
+// 管理端口味输入校验：自动用逗号分割，防止录入"微辣，中辣"变成一个整体
 const flavorsInput = computed({
   get: () => currentDish.value.flavors ? currentDish.value.flavors.join(', ') : '',
   set: (val) => {
@@ -358,98 +358,87 @@ const handleImageUpload = (event) => {
 };
 
 const handleSubmit = async () => {
-  clearMessages();
-  if (!currentDish.value.name.trim() || currentDish.value.price === null || !currentDish.value.category_id || !currentDish.value.canteen_id) {
-    errorMessage.value = '菜品名称、价格、分类和食堂均为必填项。';
-    return;
-  }
-  if (currentDish.value.price <= 0) {
-    errorMessage.value = '价格必须大于0。';
-    return;
-  }
-
   isSubmitting.value = true;
+  clearMessages();
+
   const formData = new FormData();
-  formData.append('name', currentDish.value.name);
-  formData.append('description', currentDish.value.description || '');
-  formData.append('price', currentDish.value.price);
-  formData.append('category_id', currentDish.value.category_id);
-  formData.append('canteen_id', currentDish.value.canteen_id);
-  // Convert flavors array to JSON string for backend
-  formData.append('flavors', JSON.stringify(currentDish.value.flavors || [])); 
-  formData.append('is_available', currentDish.value.is_available);
-  
+  Object.keys(currentDish.value).forEach(key => {
+    if (key === 'flavors' && Array.isArray(currentDish.value.flavors)) {
+      // Send flavors as a JSON string array
+      formData.append(key, JSON.stringify(currentDish.value.flavors));
+    } else if (currentDish.value[key] !== null) {
+      formData.append(key, currentDish.value[key]);
+    }
+  });
+
   if (selectedImageFile.value) {
     formData.append('image', selectedImageFile.value);
-  } else if (isEditing.value && currentDish.value.image_url) {
-    // If not changing the image, we don't need to send it.
-    // Backend should preserve it if 'image' field is not present in FormData.
-    // However, some backends might expect image_url to be passed if no new image.
-    // For this setup, assume backend handles preserving image if no new one is uploaded.
   }
 
   try {
-    let response;
-    if (isEditing.value) {
-      response = await axios.put(`${API_BASE_URL}/dishes/${currentDish.value.id}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    } else {
-      response = await axios.post(`${API_BASE_URL}/dishes`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    }
+    const url = isEditing.value
+      ? `${API_BASE_URL}/dishes/admin/${currentDish.value.id}`
+      : `${API_BASE_URL}/dishes/admin`;
+    
+    const method = isEditing.value ? 'put' : 'post';
 
-    if (response.data && response.data.code === 0) {
-      successMessage.value = isEditing.value ? '菜品更新成功！' : '菜品添加成功！';
-      closeModal();
-      await fetchInitialData(); // Refresh the list
-    } else {
-      throw new Error(response.data.message || (isEditing.value ? '更新菜品失败' : '添加菜品失败'));
-    }
+    const response = await axios({
+      method,
+      url,
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    
+    handleApiSuccess(response, isEditing.value ? '菜品更新成功！' : '菜品添加成功！');
+    closeModal();
+    await fetchInitialData();
   } catch (error) {
-    console.error('Error submitting dish:', error);
-    errorMessage.value = error.response?.data?.message || error.message || '操作失败，请重试。';
+    handleApiError(error, '操作失败');
   } finally {
     isSubmitting.value = false;
   }
 };
 
+const handleApiSuccess = (response, successMsg) => {
+  if (response.data && response.data.code === 0) {
+    successMessage.value = successMsg;
+    setTimeout(() => { successMessage.value = '' }, 3000);
+  } else {
+    throw new Error(response.data.message || '操作失败');
+  }
+};
+
+const handleApiError = (error, defaultMsg) => {
+  console.error('API Error:', error);
+  errorMessage.value = error.response?.data?.message || error.message || defaultMsg;
+  setTimeout(() => { errorMessage.value = '' }, 5000);
+};
+
 const toggleAvailability = async (dish) => {
   clearMessages();
   const originalStatus = dish.is_available;
-  const newStatus = !dish.is_available;
-  const actionText = newStatus ? '上架' : '停售';
 
-  // Optimistic update
-  dish.is_available = newStatus;
+  // Optimistic UI Update
+  const dishIndex = dishes.value.findIndex(d => d.id === dish.id);
+  if (dishIndex !== -1) {
+    dishes.value[dishIndex].is_available = !originalStatus;
+  }
+
+  const updatedDish = { ...dish, is_available: !originalStatus };
 
   try {
-    // Only send necessary fields for status update
-    const response = await axios.put(`${API_BASE_URL}/dishes/${dish.id}`, { 
-      is_available: newStatus,
-      // Include other required fields if your backend needs them for partial updates
-      // This might require fetching the dish details first if not all fields are in the table row data.
-      // For now, assuming the backend can handle a partial update with just 'is_available' if other fields are missing
-      // OR that the existing dish object from the table is sufficient for the PUT request if it includes all required fields.
-      name: dish.name, // Assuming these are needed by backend for validation or context
-      price: dish.price,
-      category_id: dish.category_id,
-      canteen_id: dish.canteen_id,
-      flavors: JSON.stringify(dish.flavors || []) // Ensure flavors is stringified if backend expects that
+    const response = await axios.put(`${API_BASE_URL}/dishes/admin/${dish.id}`, updatedDish, {
+      headers: { 'Content-Type': 'application/json' },
     });
-
-    if (response.data && response.data.code === 0) {
-      successMessage.value = `菜品 "${dish.name}" 已成功${actionText}。`;
-      // Optionally, update the dish in the list with response.data.data if it's returned
-    } else {
-      dish.is_available = originalStatus; // Revert optimistic update
-      throw new Error(response.data.message || `无法${actionText}菜品`);
-    }
+    handleApiSuccess(response, `菜品 "${dish.name}" 状态已更新。`);
+    // On success, we can optionally refetch to ensure perfect sync, but optimistic update handles the UI.
+    // await fetchInitialData(); 
   } catch (error) {
-    dish.is_available = originalStatus; // Revert optimistic update
-    console.error(`Error toggling availability for ${dish.name}:`, error);
-    errorMessage.value = error.response?.data?.message || error.message || `操作失败，无法${actionText}菜品。`;
+    // Revert UI on error
+    if (dishIndex !== -1) {
+      dishes.value[dishIndex].is_available = originalStatus;
+    }
+    handleApiError(error, `无法更新菜品 "${dish.name}" 的状态。`);
   }
 };
 
@@ -458,17 +447,11 @@ const confirmDeleteDish = async (dishId) => {
   if (window.confirm('确定要删除这个菜品吗？此操作无法撤销。')) {
     isSubmitting.value = true; // Use isSubmitting to indicate general async operation
     try {
-      const response = await axios.delete(`${API_BASE_URL}/dishes/${dishId}`);
-      if (response.data && response.data.code === 0) {
-        successMessage.value = '菜品删除成功！';
-        await fetchInitialData(); // Refresh list
-      } else {
-        // 新增：后端已返回错误，优先展示后端返回的 message
-        errorMessage.value = response.data.message || '删除菜品失败';
-      }
+      const response = await axios.delete(`${API_BASE_URL}/dishes/admin/${dishId}`);
+      handleApiSuccess(response, '菜品删除成功！');
+      await fetchInitialData(); // Refresh list
     } catch (error) {
-      // 新增：后端已返回错误，优先展示后端返回的 message
-      errorMessage.value = error.response?.data?.message || error.message || '删除失败，请重试。';
+      handleApiError(error, '删除失败');
     } finally {
       isSubmitting.value = false;
     }
