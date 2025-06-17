@@ -2,11 +2,9 @@ const knex = require('../utils/knex');
 const { successResponse, errorResponse } = require('../utils/responseUtil');
 const { v4: uuidv4 } = require('uuid');
 
-const DUMMY_USER_ID = "1";
-
 // 获取当前用户的所有收货地址
 const getAddresses = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   try {
     let addresses = await knex('addresses').where({ user_id: userId }).select();
     addresses.sort((a, b) => {
@@ -23,7 +21,7 @@ const getAddresses = async (req, res) => {
 
 // 获取单个地址
 const getAddressById = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   const { address_id } = req.params;
   try {
     const address = await knex('addresses').where({ id: address_id, user_id: userId }).first();
@@ -37,7 +35,7 @@ const getAddressById = async (req, res) => {
 
 // 创建新地址
 const createAddress = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   const { recipient_name, phone_number, building_name, room_details, is_default = false } = req.body;
   if (!recipient_name || !phone_number || !building_name || !room_details) {
     return errorResponse(res, 400, '收件人姓名、电话、楼宇名称和房间详情为必填项');
@@ -67,7 +65,7 @@ const createAddress = async (req, res) => {
 
 // 更新地址
 const updateAddress = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   const { address_id } = req.params;
   const { recipient_name, phone_number, building_name, room_details, is_default } = req.body;
   try {
@@ -95,7 +93,7 @@ const updateAddress = async (req, res) => {
 
 // 删除地址
 const deleteAddress = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   const { address_id } = req.params;
   try {
     const address = await knex('addresses').where({ id: address_id, user_id: userId }).first();
@@ -111,7 +109,7 @@ const deleteAddress = async (req, res) => {
 
 // 设置为默认地址（兼容 /default 和 /set-default 路由）
 const setDefaultAddress = async (req, res) => {
-  const userId = DUMMY_USER_ID;
+  const userId = req.user.id;
   // 兼容 /default 和 /set-default
   const address_id = req.params.address_id || req.params.id;
   try {

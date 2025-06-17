@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const authUser = require('../middleware/authUser'); // 引入auth中间件
 const {
   getAddresses,
   getAddressById,
@@ -9,7 +10,8 @@ const {
   setDefaultAddress
 } = require('../controllers/addressController');
 
-// 模拟用户认证 - 所有地址操作都针对 DUMMY_USER_ID
+// 所有地址相关的路由都需要认证
+router.use(authUser);
 
 // 获取用户的所有地址
 router.get('/', getAddresses);

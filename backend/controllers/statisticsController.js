@@ -1,5 +1,5 @@
 const { successResponse, errorResponse } = require('../utils/responseUtil');
-const db = require('../utils/db');
+const knex = require('../utils/knex');
 
 /**
  * @desc    获取热销菜品排行 (按销量)
@@ -7,35 +7,33 @@ const db = require('../utils/db');
  * @query   limit (optional) - 返回排行数量，默认10
  */
 const getHotDishes = async (req, res) => {
-  const limit = parseInt(req.query.limit) || 10;
+  const limit = parseInt(req.query.limit, 10) || 10;
   try {
-    const orders = await db.getAllOrders({ payment_status: 'paid' });
-    const paidOrderIds = orders.map(o => o.id);
-    const orderItems = await db.getAllOrderItems({ item_type: 'dish', order_ids: paidOrderIds });
-    const dishes = await db.getAllDishes();
-    const dishSales = {};
-    orderItems.forEach(item => {
-      const dishInfo = dishes.find(d => d.id === item.item_id);
-      if (dishInfo) {
-        if (!dishSales[item.item_id]) {
-          dishSales[item.item_id] = {
-            item_id: item.item_id,
-            dish_name: dishInfo.name,
-            total_quantity_sold: 0,
-            unit_price: parseFloat(dishInfo.price),
-            total_revenue: 0,
-          };
-        }
-        dishSales[item.item_id].total_quantity_sold += item.quantity;
-        dishSales[item.item_id].total_revenue += parseFloat(item.sub_total);
-      }
-    });
-    const sortedHotDishes = Object.values(dishSales)
-      .sort((a, b) => b.total_quantity_sold - a.total_quantity_sold)
-      .slice(0, limit);
-    successResponse(res, sortedHotDishes);
+    const hotDishesData = await knex('order_items')
+      .join('orders', 'order_items.order_id', 'orders.id')
+      .join('dishes', 'order_items.dish_id', 'dishes.id')
+      .where('orders.payment_status', 'paid')
+      .andWhere('orders.status', 'completed')
+      .select(
+        'dishes.name as dish_name',
+        'order_items.dish_id',
+        knex.raw('SUM(order_items.quantity) as total_quantity_sold'),
+        knex.raw('SUM(order_items.quantity * order_items.price) as total_revenue')
+      )
+      .groupBy('order_items.dish_id', 'dishes.name')
+      .orderBy('total_quantity_sold', 'desc')
+      .limit(limit);
+
+    const hotDishes = hotDishesData.map(item => ({
+      dish_name: item.dish_name,
+      dish_id: item.dish_id,
+      total_revenue: parseFloat(item.total_revenue || 0),
+      total_quantity_sold: parseInt(item.total_quantity_sold, 10)
+    }));
+
+    successResponse(res, hotDishes);
   } catch (error) {
-    console.error('获取热销菜品排行失败:', error.message);
+    console.error('获取热销菜品排行失败:', error.message, error.stack);
     errorResponse(res, 500, '服务器错误: 获取热销菜品排行失败');
   }
 };
@@ -46,35 +44,33 @@ const getHotDishes = async (req, res) => {
  * @query   limit (optional) - 返回排行数量，默认10
  */
 const getHotCombos = async (req, res) => {
-  const limit = parseInt(req.query.limit) || 10;
+  const limit = parseInt(req.query.limit, 10) || 10;
   try {
-    const orders = await db.getAllOrders({ payment_status: 'paid' });
-    const paidOrderIds = orders.map(o => o.id);
-    const orderItems = await db.getAllOrderItems({ item_type: 'combo', order_ids: paidOrderIds });
-    const combos = await db.getAllCombos();
-    const comboSales = {};
-    orderItems.forEach(item => {
-      const comboInfo = combos.find(c => c.id === item.item_id);
-      if (comboInfo) {
-        if (!comboSales[item.item_id]) {
-          comboSales[item.item_id] = {
-            item_id: item.item_id,
-            combo_name: comboInfo.name,
-            total_quantity_sold: 0,
-            unit_price: parseFloat(comboInfo.price),
-            total_revenue: 0,
-          };
-        }
-        comboSales[item.item_id].total_quantity_sold += item.quantity;
-        comboSales[item.item_id].total_revenue += parseFloat(item.sub_total);
-      }
-    });
-    const sortedHotCombos = Object.values(comboSales)
-      .sort((a, b) => b.total_quantity_sold - a.total_quantity_sold)
-      .slice(0, limit);
-    successResponse(res, sortedHotCombos);
+    const hotCombosData = await knex('order_items')
+      .join('orders', 'order_items.order_id', 'orders.id')
+      .join('combos', 'order_items.combo_id', 'combos.id')
+      .where('orders.payment_status', 'paid')
+      .andWhere('orders.status', 'completed')
+      .select(
+        'combos.name as combo_name',
+        'order_items.combo_id',
+        knex.raw('SUM(order_items.quantity) as total_quantity_sold'),
+        knex.raw('SUM(order_items.quantity * order_items.price) as total_revenue')
+      )
+      .groupBy('order_items.combo_id', 'combos.name')
+      .orderBy('total_quantity_sold', 'desc')
+      .limit(limit);
+
+    const hotCombos = hotCombosData.map(item => ({
+      combo_name: item.combo_name,
+      combo_id: item.combo_id,
+      total_revenue: parseFloat(item.total_revenue || 0),
+      total_quantity_sold: parseInt(item.total_quantity_sold, 10)
+    }));
+      
+    successResponse(res, hotCombos);
   } catch (error) {
-    console.error('获取热销套餐排行失败:', error.message);
+    console.error('获取热销套餐排行失败:', error.message, error.stack);
     errorResponse(res, 500, '服务器错误: 获取热销套餐排行失败');
   }
 };
@@ -90,54 +86,51 @@ const getTurnoverStats = async (req, res) => {
   try {
     const period = req.query.period || 'daily';
     let { start_date, end_date } = req.query;
-    // 默认查询最近7天
-    const today = new Date();
-    if (!start_date) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 6);
-      start_date = d.toISOString().slice(0, 10);
+
+    if (period !== 'custom') {
+        const today = new Date();
+        end_date = today.toISOString().slice(0, 10);
+        const d = new Date(today);
+        d.setDate(d.getDate() - 6);
+        start_date = d.toISOString().slice(0, 10);
     }
-    if (!end_date) {
-      end_date = today.toISOString().slice(0, 10);
-    }
-    // 查询已支付订单
-    let ordersQuery = db.getAllOrders({ payment_status: 'paid' });
-    // 直接用 knex 查询，便于聚合
-    const knex = require('../utils/knex');
-    let groupFormat, displayFormat;
+    
+    let groupFormat;
+    
     switch (period) {
       case 'weekly':
-        groupFormat = knex.raw("strftime('%Y-%W', created_at)");
-        displayFormat = 'YYYY-ww';
+        groupFormat = knex.raw("strftime('%Y-W%W', created_at, 'weekday 1', '-3 days')");
         break;
       case 'monthly':
         groupFormat = knex.raw("strftime('%Y-%m', created_at)");
-        displayFormat = 'YYYY-MM';
         break;
       case 'yearly':
         groupFormat = knex.raw("strftime('%Y', created_at)");
-        displayFormat = 'YYYY';
         break;
-      default:
+      default: // daily or custom
         groupFormat = knex.raw("strftime('%Y-%m-%d', created_at)");
-        displayFormat = 'YYYY-MM-DD';
     }
-    // 过滤日期
-    const rows = await knex('orders')
+    
+    const query = knex('orders')
       .where('payment_status', 'paid')
-      .andWhere('created_at', '>=', start_date + ' 00:00:00')
-      .andWhere('created_at', '<=', end_date + ' 23:59:59')
       .select({ period: groupFormat })
       .sum({ total_turnover: 'total_amount' })
       .count({ order_count: '*' })
       .groupBy('period')
       .orderBy('period', 'asc');
-    // 格式化 period_display
+
+    if (start_date && end_date) {
+        query.andWhere('created_at', '>=', `${start_date} 00:00:00`)
+             .andWhere('created_at', '<=', `${end_date} 23:59:59`);
+    }
+
+    const rows = await query;
+    
     const result = rows.map(row => ({
       ...row,
       period_display: row.period,
-      total_turnover: parseFloat(row.total_turnover),
-      order_count: row.order_count
+      total_turnover: parseFloat(row.total_turnover || 0),
+      order_count: Number(row.order_count || 0)
     }));
     return successResponse(res, result);
   } catch (error) {
@@ -152,29 +145,27 @@ const getTurnoverStats = async (req, res) => {
  */
 const getStatsOverview = async (req, res) => {
   try {
-    const knex = require('../utils/knex');
-    // 今日日期
-    const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
-    // 今日订单数/营业额
+    const todayStr = new Date().toISOString().slice(0, 10);
+
     const todayOrders = await knex('orders')
       .where('payment_status', 'paid')
-      .andWhere('created_at', '>=', todayStr + ' 00:00:00')
-      .andWhere('created_at', '<=', todayStr + ' 23:59:59')
-      .select(knex.raw('count(*) as count'), knex.raw('sum(total_amount) as turnover'));
-    // 待处理订单数（未完成/未取消）
+      .andWhere('created_at', '>=', `${todayStr} 00:00:00`)
+      .andWhere('created_at', '<=', `${todayStr} 23:59:59`)
+      .first(knex.raw('count(*) as count'), knex.raw('sum(total_amount) as turnover'));
+
     const pendingOrders = await knex('orders')
-      .whereIn('status', ['pending', 'confirmed', 'preparing', 'delivering'])
-      .andWhere('payment_status', 'paid')
-      .count({ count: '*' });
-    // 在售商品数（菜品+套餐）
-    const dishCount = await knex('dishes').where('is_available', 1).count({ count: '*' });
-    const comboCount = await knex('combos').where('is_enabled', 1).count({ count: '*' });
+      .whereIn('status', ['confirmed', 'preparing', 'delivering'])
+      .where('payment_status', 'paid')
+      .first(knex.raw('count(*) as count'));
+
+    const dishCount = await knex('dishes').where('is_available', true).first(knex.raw('count(*) as count'));
+    const comboCount = await knex('combos').where('is_enabled', true).first(knex.raw('count(*) as count'));
+    
     const overview = {
-      todays_orders_count: Number(todayOrders[0]?.count || 0),
-      todays_turnover: Number(todayOrders[0]?.turnover || 0),
-      pending_orders_count: Number(pendingOrders[0]?.count || 0),
-      available_items_count: Number(dishCount[0]?.count || 0) + Number(comboCount[0]?.count || 0)
+      todays_orders_count: Number(todayOrders?.count || 0),
+      todays_turnover: parseFloat(todayOrders?.turnover || 0),
+      pending_orders_count: Number(pendingOrders?.count || 0),
+      available_items_count: Number(dishCount?.count || 0) + Number(comboCount?.count || 0)
     };
     return successResponse(res, overview);
   } catch (error) {
