@@ -79,12 +79,14 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mb-4">
             <div class="bg-slate-50 p-3 rounded-md">
                 <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">配送至</p>
-                <p class="text-sm text-slate-700 font-medium" v-if="order.address && order.address.recipient_name">
-                    {{ order.address.recipient_name }} ({{ order.address.phone_number }})
-                </p>
-                <p class="text-sm text-slate-600" v-if="order.address && order.address.building_name">
-                    {{ order.address.building_name }} - {{ order.address.room_details }}
-                </p>
+                <div v-if="order.address">
+                    <p class="text-sm text-slate-700 font-medium">
+                        {{ order.address.recipient_name }} ({{ order.address.phone_number }})
+                    </p>
+                    <p class="text-sm text-slate-600">
+                        {{ order.address.building_name }} - {{ order.address.room_details }}
+                    </p>
+                </div>
                 <p v-else class="text-sm text-slate-500 italic">地址信息缺失</p>
             </div>
              <div class="bg-slate-50 p-3 rounded-md">

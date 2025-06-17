@@ -242,10 +242,26 @@ const getAllOrders = async (req, res) => {
         .leftJoin('combos', 'order_items.combo_id', 'combos.id')
         .whereIn('order_items.order_id', orderIds);
 
-    const ordersWithItems = orders.map(order => ({
-      ...order,
-      items: allOrderItems.filter(item => item.order_id === order.id)
-    }));
+    const ordersWithItems = orders.map(order => {
+      const {
+        recipient_name,
+        phone_number,
+        building_name,
+        room_details,
+        ...restOfOrder
+      } = order;
+      
+      return {
+        ...restOfOrder,
+        address: recipient_name ? {
+          recipient_name,
+          phone_number,
+          building_name,
+          room_details,
+        } : null,
+        items: allOrderItems.filter(item => item.order_id === order.id),
+      };
+    });
     
     successResponse(res, ordersWithItems);
   } catch (error) {
