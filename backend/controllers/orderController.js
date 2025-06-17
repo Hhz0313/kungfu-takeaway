@@ -242,29 +242,15 @@ const getAllOrders = async (req, res) => {
         .leftJoin('combos', 'order_items.combo_id', 'combos.id')
         .whereIn('order_items.order_id', orderIds);
 
-    const processedOrders = orders.map(order => {
-        const items = allOrderItems.filter(item => item.order_id === order.id);
-        const address = {
-            recipient_name: order.recipient_name,
-            phone_number: order.phone_number,
-            building_name: order.building_name,
-            room_details: order.room_details,
-        };
-        // avoid including redundant address fields in the top-level order object
-        delete order.recipient_name;
-        delete order.phone_number;
-        delete order.building_name;
-        delete order.room_details;
-        return {
-            ...order,
-            items,
-            address,
-        };
-    });
-    successResponse(res, processedOrders);
+    const ordersWithItems = orders.map(order => ({
+      ...order,
+      items: allOrderItems.filter(item => item.order_id === order.id)
+    }));
+    
+    successResponse(res, ordersWithItems);
   } catch (error) {
-    console.error('管理员获取所有订单失败:', error.message);
-    errorResponse(res, 500, '服务器错误: 管理员获取所有订单失败');
+    console.error('获取所有订单失败:', error.message, error.stack);
+    errorResponse(res, 500, '服务器错误: 获取所有订单失败');
   }
 };
 
