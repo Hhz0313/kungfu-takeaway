@@ -17,6 +17,12 @@
             <router-link to="/home/menu" class="nav-link" active-class="nav-link-active">菜单</router-link>
             <router-link to="/home/cart" class="nav-link" active-class="nav-link-active">购物车</router-link>
             <router-link to="/home/my-orders" class="nav-link" active-class="nav-link-active">我的订单</router-link>
+            <router-link to="/home/ai-assistant" class="nav-link flex items-center" active-class="nav-link-active">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zM5.5 8.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm5 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm-2.5 5a2.5 2.5 0 105 0 2.5 2.5 0 00-5 0z" clip-rule="evenodd" />
+              </svg>
+              AI助手
+            </router-link>
           </nav>
 
           <!-- User Menu -->

@@ -24,6 +24,7 @@ const statisticsRoutes = require('./routes/statisticsRoutes');
 const configRoutes = require('./routes/configRoutes');
 const userRoutes = require('./routes/userRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 // API Routes
 app.use('/api/categories', categoryRoutes);
@@ -36,6 +37,7 @@ app.use('/api/statistics', statisticsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Global error handler (Simplified example)
 app.use((err, req, res, next) => {

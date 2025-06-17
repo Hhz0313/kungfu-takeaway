@@ -21,6 +21,7 @@ const OrderSuccessPage = () => import('../views/customer/OrderSuccessPage.vue');
 const OrderHistoryPage = () => import('../views/customer/OrderHistoryPage.vue');
 const OrderDetailPage = () => import('../views/customer/OrderDetailPage.vue');
 const ProfilePage = () => import('../views/customer/ProfilePage.vue');
+const AiAssistantPage = () => import('../views/customer/AiAssistantPage.vue');
 
 // --- Admin Pages (Lazy loaded) ---
 const AdminDashboardPage = () => import('../views/admin/AdminDashboardPage.vue');
@@ -53,6 +54,7 @@ const routes = [
       { path: 'my-orders', name: 'OrderHistoryPage', component: OrderHistoryPage, meta: { requiresAuth: true } },
       { path: 'my-orders/:orderId', name: 'OrderDetailPage', component: OrderDetailPage, props: true, meta: { requiresAuth: true } },
       { path: 'profile', name: 'ProfilePage', component: ProfilePage, meta: { requiresAuth: true } },
+      { path: 'ai-assistant', name: 'AiAssistantPage', component: AiAssistantPage, meta: { requiresAuth: true } },
     ]
   },
 

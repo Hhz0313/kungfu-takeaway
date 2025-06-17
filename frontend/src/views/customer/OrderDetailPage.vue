@@ -68,7 +68,7 @@
               <h3 class="font-semibold text-gray-800">{{ item.name }}</h3>
               <p class="text-sm text-gray-500">{{ (item.dish_id ? '菜品' : '套餐') }}</p>
               <p v-if="item.selected_flavors && item.selected_flavors.length > 0" class="text-xs text-gray-500">
-                口味: {{ formatFlavors(item.selected_flavors) }}
+                 {{ formatFlavors(item.selected_flavors) }}
               </p>
             </div>
             <div class="text-right flex-shrink-0">
