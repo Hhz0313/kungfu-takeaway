@@ -64,11 +64,12 @@ const username = ref('');
 const password = ref('');
 const errorMessage = ref('');
 const router = useRouter();
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
 const handleLogin = async () => {
   errorMessage.value = '';
   try {
-    const response = await axios.post('http://localhost:3000/api/admin/login', {
+    const response = await axios.post(`${API_BASE_URL}/admin/login`, {
       username: username.value,
       password: password.value,
     });

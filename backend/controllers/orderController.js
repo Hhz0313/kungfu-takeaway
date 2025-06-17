@@ -213,36 +213,53 @@ const getOrderDetails = async (req, res) => {
 const getAllOrders = async (req, res) => {
   const { status } = req.query;
   try {
-    let orders = status ? await knex('orders').where({ status }).select() : await knex('orders').select();
-    orders = orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const allUsers = await knex('users').select();
-    const allAddresses = await knex('addresses').select();
-    const allOrderItems = await knex('order_items').select();
-    const allDishes = await knex('dishes').select();
-    const allCombos = await knex('combos').select();
+    let query = knex('orders')
+      .select(
+        'orders.*',
+        'users.username as customer_username',
+        'addresses.recipient_name',
+        'addresses.phone_number',
+        'addresses.building_name',
+        'addresses.room_details'
+      )
+      .join('users', 'orders.user_id', 'users.id')
+      .leftJoin('addresses', 'orders.address_id', 'addresses.id');
+
+    if (status && status !== 'all') {
+      query.where('orders.status', status);
+    }
+    
+    let orders = await query.orderBy('orders.created_at', 'desc');
+
+    const orderIds = orders.map(o => o.id);
+    const allOrderItems = await knex('order_items')
+        .select(
+            'order_items.*',
+            knex.raw('COALESCE(dishes.name, combos.name) as name'),
+            knex.raw('COALESCE(dishes.image_url, combos.image_url) as image_url')
+        )
+        .leftJoin('dishes', 'order_items.dish_id', 'dishes.id')
+        .leftJoin('combos', 'order_items.combo_id', 'combos.id')
+        .whereIn('order_items.order_id', orderIds);
+
     const processedOrders = orders.map(order => {
-      const customer = allUsers.find(u => u.id === order.user_id) || { username: '未知用户' };
-      const address = allAddresses.find(a => a.id === order.address_id) || { recipient_name: 'N/A', phone_number: 'N/A', address_line1: 'N/A' };
-      let items = allOrderItems.filter(item => item.order_id === order.id);
-      items = items.map(item => {
-        let itemName = '商品信息缺失';
-        if (item.item_type === 'dish') {
-          const dish = allDishes.find(d => d.id === item.item_id);
-          if (dish) itemName = dish.name;
-        } else if (item.item_type === 'combo') {
-          const combo = allCombos.find(c => c.id === item.item_id);
-          if (combo) itemName = combo.name;
-        }
-        return { ...item, item_name: itemName };
-      });
-      return {
-        ...order,
-        customer_username: customer.username,
-        recipient_name: address.recipient_name,
-        phone_number: address.phone_number,
-        address_line1: address.address_line1,
-        items: items,
-      };
+        const items = allOrderItems.filter(item => item.order_id === order.id);
+        const address = {
+            recipient_name: order.recipient_name,
+            phone_number: order.phone_number,
+            building_name: order.building_name,
+            room_details: order.room_details,
+        };
+        // avoid including redundant address fields in the top-level order object
+        delete order.recipient_name;
+        delete order.phone_number;
+        delete order.building_name;
+        delete order.room_details;
+        return {
+            ...order,
+            items,
+            address,
+        };
     });
     successResponse(res, processedOrders);
   } catch (error) {

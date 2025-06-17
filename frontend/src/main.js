@@ -8,9 +8,12 @@ import './style.css'; // Global styles + Tailwind
 // 设置axios请求拦截器，在header中添加token
 axios.interceptors.request.use(
   (config) => {
+    // 根据路由来判断应该使用哪个 token
+    // window.location.pathname 可以获取当前的路径
+    const isAdminRoute = window.location.pathname.startsWith('/admin');
+    
     let token = null;
-    // Check the URL to decide which token to use
-    if (config.url.includes('/admin')) {
+    if (isAdminRoute) {
       token = localStorage.getItem('admin-token');
     } else {
       token = localStorage.getItem('user-token');

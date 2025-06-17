@@ -6,14 +6,13 @@
     <div class="mb-6 bg-white p-4 rounded-lg shadow-sm flex flex-wrap items-center gap-x-6 gap-y-4">
       <div>
         <label for="statusFilter" class="block text-sm font-medium text-slate-700 mb-1">按状态筛选:</label>
-        <select id="statusFilter" v-model="selectedStatusFilter" @change="fetchOrders(1)" class="select-field">
+        <select id="statusFilter" v-model="selectedStatusFilter" @change="fetchOrders" class="select-field">
           <option value="all">所有状态</option>
           <option v-for="status in orderStatuses" :key="status.value" :value="status.value">
             {{ status.text }}
           </option>
         </select>
       </div>
-      <!-- Add more filters here if needed, e.g., date range -->
     </div>
 
     <!-- Loading Indicator -->
@@ -73,24 +72,24 @@
           </div>
           <div>
             <p class="text-xs text-slate-500 uppercase tracking-wider">支付状态</p>
-            <p class="text-sm font-medium" :class="order.payment_status === 'Paid' ? 'text-green-600' : 'text-amber-600'">{{ translatePaymentStatus(order.payment_status) }}</p>
+            <p class="text-sm font-medium" :class="order.payment_status === 'paid' ? 'text-green-600' : 'text-amber-600'">{{ translatePaymentStatus(order.payment_status) }}</p>
           </div>
         </div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mb-4">
             <div class="bg-slate-50 p-3 rounded-md">
                 <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">配送至</p>
-                <p class="text-sm text-slate-700 font-medium" v-if="order.address">
+                <p class="text-sm text-slate-700 font-medium" v-if="order.address && order.address.recipient_name">
                     {{ order.address.recipient_name }} ({{ order.address.phone_number }})
                 </p>
-                <p class="text-sm text-slate-600" v-if="order.address">
+                <p class="text-sm text-slate-600" v-if="order.address && order.address.building_name">
                     {{ order.address.building_name }} - {{ order.address.room_details }}
                 </p>
                 <p v-else class="text-sm text-slate-500 italic">地址信息缺失</p>
             </div>
              <div class="bg-slate-50 p-3 rounded-md">
                 <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">订单备注</p>
-                <p class="text-sm text-slate-600 italic">{{ order.notes || '无备注' }}</p>
+                <p class="text-sm text-slate-600 italic">{{ order.remark || '无备注' }}</p>
             </div>
         </div>
 
@@ -123,10 +122,10 @@
             <div v-if="expandedOrder === order.id" class="mt-3 space-y-2 bg-slate-50 p-3 rounded-md">
                 <div v-for="item in order.items" :key="item.id" class="p-2.5 bg-white rounded-md shadow-sm flex justify-between items-center hover:shadow-md transition-shadow duration-150">
                     <div>
-                        <p class="font-medium text-sm text-slate-800">{{ item.name }} <span class="text-xs text-slate-500">({{ item.type === 'dish' ? '菜品' : '套餐' }})</span></p>
-                        <p class="text-xs text-slate-600">数量: {{ item.quantity }} &nbsp;&times;&nbsp; ¥{{ item.price_at_order.toFixed(2) }}</p>
+                        <p class="font-medium text-sm text-slate-800">{{ item.name }} <span class="text-xs text-slate-500">({{ item.dish_id ? '菜品' : '套餐' }})</span></p>
+                        <p class="text-xs text-slate-600">数量: {{ item.quantity }} &nbsp;&times;&nbsp; ¥{{ item.price.toFixed(2) }}</p>
                     </div>
-                    <p class="font-semibold text-sm text-slate-800">¥{{ (item.quantity * item.price_at_order).toFixed(2) }}</p>
+                    <p class="font-semibold text-sm text-slate-800">¥{{ (item.quantity * item.price).toFixed(2) }}</p>
                 </div>
                  <p v-if="!order.items || order.items.length === 0" class="text-sm text-slate-500 italic text-center py-2">此订单没有项目信息。</p>
             </div>
@@ -149,7 +148,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -169,19 +168,20 @@ const expandedOrder = ref(null);
 
 const selectedStatusFilter = ref('all');
 const orderStatuses = [
-  { value: 'Pending', text: '待处理' },
-  { value: 'Processing', text: '处理中' },
-  { value: 'OutForDelivery', text: '派送中' },
-  { value: 'Completed', text: '已完成' },
-  { value: 'Cancelled', text: '已取消' },
-  { value: 'PaymentFailed', text: '支付失败' },
+  { value: 'pending', text: '待确认' },
+  { value: 'confirmed', text: '已确认' },
+  { value: 'preparing', text: '准备中' },
+  { value: 'delivering', text: '派送中' },
+  { value: 'completed', text: '已完成' },
+  { value: 'cancelled', text: '已取消' },
+  { value: 'refunded', text: '已退款' },
 ];
 
 const paymentStatuses = {
-    Pending: '待支付',
-    Paid: '已支付',
-    Failed: '支付失败',
-    Refunded: '已退款'
+    unpaid: '待支付',
+    paid: '已支付',
+    failed: '支付失败',
+    refunded: '已退款'
 };
 
 const translateOrderStatus = (statusKey) => {
@@ -195,38 +195,45 @@ const translatePaymentStatus = (statusKey) => {
 
 const formatToBeijingTime = (dateString) => {
   if (!dateString) return '时间不可用';
-  // Explicitly treat the incoming string as UTC and format it to Beijing time.
   return dayjs.utc(dateString).tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss');
 };
 
 const getStatusPillClasses = (statusKey) => {
   switch (statusKey) {
-    case 'Pending': return 'bg-yellow-100 text-yellow-700';
-    case 'Processing': return 'bg-blue-100 text-blue-700';
-    case 'OutForDelivery': return 'bg-purple-100 text-purple-700';
-    case 'Completed': return 'bg-green-100 text-green-700';
-    case 'Cancelled': return 'bg-slate-100 text-slate-600';
-    case 'PaymentFailed': return 'bg-red-100 text-red-700';
+    case 'pending': return 'bg-yellow-100 text-yellow-800';
+    case 'confirmed': return 'bg-sky-100 text-sky-800';
+    case 'preparing': return 'bg-blue-100 text-blue-800';
+    case 'delivering': return 'bg-purple-100 text-purple-800';
+    case 'completed': return 'bg-green-100 text-green-800';
+    case 'cancelled': return 'bg-slate-100 text-slate-700';
+    case 'refunded': return 'bg-orange-100 text-orange-800';
     default: return 'bg-gray-100 text-gray-700';
   }
 };
 
 const availableOrderStatusesForUpdate = (currentStatus) => {
     const transitions = {
-        Pending: ['Processing', 'Cancelled'],
-        Processing: ['OutForDelivery', 'Cancelled'],
-        OutForDelivery: ['Completed', 'Cancelled'],
-        PaymentFailed: ['Pending', 'Cancelled'], // Allow admin to reset to Pending for re-payment attempt
+        pending: ['confirmed', 'cancelled'],
+        confirmed: ['preparing', 'cancelled'],
+        preparing: ['delivering', 'cancelled'],
+        delivering: ['completed'],
     };
     const allowedTransitions = transitions[currentStatus] || [];
-    // For terminal states (Completed, Cancelled), no further transitions by admin generally.
-    if (['Completed', 'Cancelled'].includes(currentStatus)) {
+    if (['completed', 'cancelled', 'refunded'].includes(currentStatus)) {
         return [];
     }
     return orderStatuses.filter(s => allowedTransitions.includes(s.value));
 };
 
-const clearMessages = () => { errorMessage.value = ''; successMessage.value = ''; };
+const clearMessages = (duration = 0) => { 
+    if (duration > 0) {
+        setTimeout(() => {
+            errorMessage.value = ''; successMessage.value = '';
+        }, duration);
+    } else {
+        errorMessage.value = ''; successMessage.value = '';
+    }
+};
 
 const fetchOrders = async () => {
   isLoading.value = true;
@@ -246,6 +253,7 @@ const fetchOrders = async () => {
   } catch (error) {
     console.error('Error fetching orders:', error);
     errorMessage.value = error.response?.data?.message || error.message || '获取订单数据失败';
+    clearMessages(5000);
   } finally {
     isLoading.value = false;
   }
@@ -256,33 +264,32 @@ onMounted(fetchOrders);
 const updateOrderStatus = async (orderId, newStatus) => {
   if (!newStatus) {
     errorMessage.value = '请选择一个目标状态。';
+    clearMessages(3000);
     return;
   }
   isUpdatingStatus.value[orderId] = true;
   clearMessages();
   try {
-    const response = await axios.put(`${API_BASE_URL}/orders/admin/${orderId}/status`, { status: newStatus });
+    const response = await axios.put(`${API_BASE_URL}/orders/admin/${orderId}`, { status: newStatus });
     if (response.data && response.data.code === 0) {
       successMessage.value = `订单 #${orderId.substring(0,8)}... 状态已更新为 ${translateOrderStatus(newStatus)}。`;
-      // Find the order and update its status and new_status locally
       const orderIndex = orders.value.findIndex(o => o.id === orderId);
       if (orderIndex !== -1) {
-        orders.value[orderIndex].status = newStatus;
-        orders.value[orderIndex].new_status = ''; // Reset dropdown
+        if (selectedStatusFilter.value !== 'all' && selectedStatusFilter.value !== newStatus) {
+            orders.value.splice(orderIndex, 1);
+        } else {
+            orders.value[orderIndex].status = newStatus;
+            orders.value[orderIndex].new_status = '';
+        }
       }
-      // No full fetchOrders() needed if filter is 'all' or matches new status
-      // However, if the filter would hide this order, a full refresh is safer or more complex local filtering logic.
-      // For simplicity now, only refresh if filter might change visibility.
-      if (selectedStatusFilter.value !== 'all' && selectedStatusFilter.value !== newStatus) {
-         await fetchOrders();
-      }
-
+      clearMessages(4000);
     } else {
       throw new Error(response.data.message || '更新订单状态失败');
     }
   } catch (error) {
     console.error('Error updating order status:', error);
     errorMessage.value = error.response?.data?.message || error.message || '更新订单状态失败';
+    clearMessages(5000);
   } finally {
     isUpdatingStatus.value[orderId] = false;
   }

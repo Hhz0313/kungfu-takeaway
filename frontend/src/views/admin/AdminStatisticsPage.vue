@@ -67,10 +67,10 @@
             <div>
                 <label for="turnoverPeriod" class="label-form">统计周期:</label>
                 <select v-model="turnoverParams.period" @change="fetchTurnoverStats" class="select-field">
-                    <option value="daily">每日</option>
-                    <option value="weekly">每周</option>
-                    <option value="monthly">每月</option>
-                    <option value="custom">自定义日期范围</option>
+                    <option value="daily">最近7日</option>
+                    <option value="weekly">按周</option>
+                    <option value="monthly">按月</option>
+                    <option value="custom">自定义</option>
                 </select>
             </div>
             <div v-if="turnoverParams.period === 'custom'" class="flex flex-wrap gap-4 items-center">
@@ -87,27 +87,12 @@
                  </button>
             </div>
         </div>
-        <div v-if="isLoadingTurnover" class="flex justify-center items-center py-6">
+        <div v-if="isLoadingTurnover" class="flex justify-center items-center py-10">
           <svg class="animate-spin h-6 w-6 text-blue-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-          <p class="text-slate-500">加载营业额数据...</p>
+          <p class="text-slate-500">加载图表数据...</p>
         </div>
-        <div v-else-if="turnoverStats && turnoverStats.length > 0" class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
-                <thead class="bg-slate-50">
-                    <tr>
-                        <th class="th-cell">日期/周期</th>
-                        <th class="th-cell text-right">营业额 (¥)</th>
-                        <th class="th-cell text-right">订单数</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-slate-200">
-                    <tr v-for="item in turnoverStats" :key="item.period" class="hover:bg-slate-50 transition-colors">
-                        <td class="td-cell font-medium text-slate-700">{{ item.period_display || item.period }}</td>
-                        <td class="td-cell text-right">{{ item.total_turnover.toFixed(2) }}</td>
-                        <td class="td-cell text-right">{{ item.order_count }}</td>
-                    </tr>
-                </tbody>
-            </table>
+        <div v-else-if="turnoverChartData.labels?.length > 0" style="height: 350px;">
+            <Line :data="turnoverChartData" :options="chartOptions" />
         </div>
         <div v-else-if="!isLoadingTurnover" class="text-center py-8 text-slate-500">
           <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -119,21 +104,14 @@
     <section v-if="!isLoading" class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <div class="bg-white p-5 rounded-lg shadow-md">
         <h2 class="text-xl font-semibold mb-4 text-slate-600">热销菜品 (Top 5)</h2>
-        <div v-if="isLoadingHotDishes" class="flex justify-center items-center py-6">
+        <div v-if="isLoadingHotDishes" class="flex justify-center items-center py-6 min-h-[300px]">
           <svg class="animate-spin h-6 w-6 text-blue-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
           <p class="text-slate-500">加载热销菜品...</p>
         </div>
-        <ul v-else-if="hotDishes && hotDishes.length > 0" class="space-y-3">
-          <li v-for="(dish, index) in hotDishes" :key="dish.dish_id" class="hot-item-card">
-            <span class="hot-item-rank bg-blue-500">#{{ index + 1 }}</span>
-            <div class="flex-grow">
-              <p class="font-medium text-slate-800">{{ dish.name }}</p>
-              <p class="text-sm text-slate-500">销量: {{ dish.total_quantity_sold }}</p>
-            </div>
-            <p class="text-lg font-semibold text-green-600">¥{{ dish.total_revenue.toFixed(2) }}</p>
-          </li>
-        </ul>
-        <div v-else class="text-center py-8 text-slate-500">
+        <div v-else-if="hotDishesChartData.labels?.length > 0" style="height: 300px;">
+          <Bar :data="hotDishesChartData" :options="chartOptions" />
+        </div>
+        <div v-else class="text-center py-8 text-slate-500 min-h-[300px] flex flex-col justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
           暂无热销菜品数据。
         </div>
@@ -141,35 +119,17 @@
 
       <div class="bg-white p-5 rounded-lg shadow-md">
         <h2 class="text-xl font-semibold mb-4 text-slate-600">热销套餐 (Top 5)</h2>
-        <div v-if="isLoadingHotCombos" class="flex justify-center items-center py-6">
+        <div v-if="isLoadingHotCombos" class="flex justify-center items-center py-6 min-h-[300px]">
           <svg class="animate-spin h-6 w-6 text-blue-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
           <p class="text-slate-500">加载热销套餐...</p>
         </div>
-        <ul v-else-if="hotCombos && hotCombos.length > 0" class="space-y-3">
-          <li v-for="(combo, index) in hotCombos" :key="combo.combo_id" class="hot-item-card">
-            <span class="hot-item-rank bg-purple-500">#{{ index + 1 }}</span>
-            <div class="flex-grow">
-              <p class="font-medium text-slate-800">{{ combo.name }}</p>
-              <p class="text-sm text-slate-500">销量: {{ combo.total_quantity_sold }}</p>
-            </div>
-            <p class="text-lg font-semibold text-green-600">¥{{ combo.total_revenue.toFixed(2) }}</p>
-          </li>
-        </ul>
-        <div v-else class="text-center py-8 text-slate-500">
+        <div v-else-if="hotCombosChartData.labels?.length > 0" style="height: 300px;">
+           <Bar :data="hotCombosChartData" :options="chartOptions" />
+        </div>
+        <div v-else class="text-center py-8 text-slate-500 min-h-[300px] flex flex-col justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3" /></svg>
           暂无热销套餐数据。
         </div>
-      </div>
-    </section>
-
-    <!-- Placeholder for Charts -->
-    <section v-if="!isLoading" class="mt-10">
-      <h2 class="text-xl font-semibold mb-4 text-slate-600">图表展示 (待实现)</h2>
-      <div class="bg-white p-6 rounded-lg shadow-md text-center text-slate-500">
-        <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-16 w-16 text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        <p>图表组件 (例如 Chart.js) 将在此处集成，以可视化营业额趋势和热销商品占比等。</p>
       </div>
     </section>
 
@@ -177,8 +137,25 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue';
+import { ref, onMounted, reactive, computed } from 'vue';
 import axios from 'axios';
+import { Line, Bar } from 'vue-chartjs';
+import {
+  Chart as ChartJS,
+  Title,
+  Tooltip,
+  Legend,
+  LineElement,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  Filler
+} from 'chart.js';
+
+ChartJS.register(
+    Title, Tooltip, Legend, LineElement, BarElement, CategoryScale, LinearScale, PointElement, Filler
+);
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
@@ -195,9 +172,8 @@ const turnoverStats = ref([]);
 
 const turnoverParams = reactive({
   period: 'daily', 
-  startDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0], 
-  endDate: new Date().toISOString().split('T')[0],
-  limit: 10 
+  startDate: '', 
+  endDate: '',
 });
 
 const clearMessages = () => { errorMessage.value = ''; };
@@ -227,6 +203,7 @@ const fetchHotDishes = async () => {
     }
   } catch (error) {
     console.error('Error fetching hot dishes:', error);
+    hotDishes.value = [];
   } finally {
     isLoadingHotDishes.value = false;
   }
@@ -243,6 +220,7 @@ const fetchHotCombos = async () => {
     }
   } catch (error) {
     console.error('Error fetching hot combos:', error);
+    hotCombos.value = [];
   } finally {
     isLoadingHotCombos.value = false;
   }
@@ -250,21 +228,17 @@ const fetchHotCombos = async () => {
 
 const fetchTurnoverStats = async () => {
   isLoadingTurnover.value = true;
-  clearMessages(); // Clear general error, or have specific error for turnover
+  clearMessages();
   try {
-    let params = { period: turnoverParams.period, limit: turnoverParams.limit };
+    let params = { period: turnoverParams.period };
     if (turnoverParams.period === 'custom') {
       if (!turnoverParams.startDate || !turnoverParams.endDate) {
-        // This error should ideally be shown near the date inputs
         errorMessage.value = '自定义范围查询请选择开始和结束日期。'; 
         isLoadingTurnover.value = false;
         return;
       }
-      params = { 
-        period: 'custom',
-        start_date: turnoverParams.startDate,
-        end_date: turnoverParams.endDate
-      };
+      params.start_date = turnoverParams.startDate;
+      params.end_date = turnoverParams.endDate;
     }
     
     const response = await axios.get(`${API_BASE_URL}/statistics/turnover`, { params });
@@ -285,6 +259,11 @@ const fetchTurnoverStats = async () => {
 onMounted(async () => {
   isLoading.value = true;
   clearMessages();
+  const today = new Date();
+  turnoverParams.endDate = today.toISOString().split('T')[0];
+  const sevenDaysAgo = new Date(today.setDate(today.getDate() - 7));
+  turnoverParams.startDate = sevenDaysAgo.toISOString().split('T')[0];
+  
   await Promise.all([
     fetchOverviewStats(),
     fetchHotDishes(),
@@ -293,6 +272,63 @@ onMounted(async () => {
   ]);
   isLoading.value = false;
 });
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  scales: {
+    y: {
+      beginAtZero: true
+    }
+  },
+  plugins: {
+    legend: {
+      display: false
+    }
+  }
+};
+
+const turnoverChartData = computed(() => ({
+  labels: turnoverStats.value.map(item => item.period_display),
+  datasets: [
+    {
+      label: '营业额 (元)',
+      data: turnoverStats.value.map(item => item.total_turnover),
+      backgroundColor: 'rgba(59, 130, 246, 0.2)',
+      borderColor: 'rgba(59, 130, 246, 1)',
+      borderWidth: 2,
+      pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+      tension: 0.3,
+      fill: true,
+    }
+  ]
+}));
+
+const hotDishesChartData = computed(() => ({
+  labels: hotDishes.value.map(d => d.dish_name),
+  datasets: [
+    {
+      label: '销量',
+      data: hotDishes.value.map(d => d.total_quantity_sold),
+      backgroundColor: 'rgba(34, 197, 94, 0.6)',
+      borderColor: 'rgba(34, 197, 94, 1)',
+      borderWidth: 1
+    }
+  ]
+}));
+
+const hotCombosChartData = computed(() => ({
+  labels: hotCombos.value.map(c => c.combo_name),
+  datasets: [
+    {
+      label: '销量',
+      data: hotCombos.value.map(c => c.total_quantity_sold),
+      backgroundColor: 'rgba(168, 85, 247, 0.6)',
+      borderColor: 'rgba(168, 85, 247, 1)',
+      borderWidth: 1
+    }
+  ]
+}));
 
 </script>
 
@@ -325,21 +361,4 @@ onMounted(async () => {
 .btn-primary-sm {
   @apply px-4 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60 transition-colors duration-150;
 }
-
-.th-cell {
-  @apply px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider;
-}
-
-.td-cell {
-  @apply px-4 py-3 whitespace-nowrap text-sm text-slate-600;
-}
-
-.hot-item-card {
-  @apply flex items-center bg-slate-50 p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-150;
-}
-
-.hot-item-rank {
-  @apply h-8 w-8 flex items-center justify-center rounded-full text-white font-semibold text-sm mr-3 shadow-sm;
-}
-
 </style> 
