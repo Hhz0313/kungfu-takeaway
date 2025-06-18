@@ -1,128 +1,130 @@
 <template>
-  <div class="container mx-auto p-6">
-    <h1 class="text-2xl font-semibold mb-6 text-slate-700">菜品管理</h1>
-
-    <div class="mb-6">
-      <button @click="openAddModal" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-        </svg>
-        添加新菜品
-      </button>
-    </div>
-
-    <!-- Loading Indicator -->
-    <div v-if="isLoading && !dishes.length" class="flex justify-center items-center py-10">
-      <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-      <p class="ml-3 text-lg font-medium text-slate-600">加载菜品数据中...</p>
-    </div>
-
-    <!-- Error Message -->
-    <div v-if="errorMessage" class="bg-red-50 border-l-4 border-red-400 text-red-700 p-4 mb-6 rounded-md shadow-sm" role="alert">
-      <div class="flex">
-        <div class="py-1"><svg class="fill-current h-6 w-6 text-red-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-5.03V7.97a1 1 0 012 0v5.06a1 1 0 11-2 0zm0 3a1 1 0 112 0 1 1 0 01-2 0z" clip-rule="evenodd" fill-rule="evenodd"/></svg></div>
-        <div>
-          <p class="font-bold">错误!</p>
-          <p class="text-sm">{{ errorMessage }}</p>
+  <div class="bg-slate-50 min-h-screen">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+      <!-- Page Header -->
+      <div class="mb-6 md:flex md:items-center md:justify-between">
+        <div class="flex-1 min-w-0">
+          <h1 class="text-2xl sm:text-3xl font-bold leading-tight text-slate-800">菜品管理</h1>
+          <p class="mt-1 text-sm text-slate-500">在这里管理您的所有菜品</p>
         </div>
-        <button @click="errorMessage = ''" class="ml-auto -mx-1.5 -my-1.5 bg-red-50 text-red-500 rounded-lg focus:ring-2 focus:ring-red-400 p-1.5 hover:bg-red-100 inline-flex h-8 w-8" aria-label="Close">
-          <span class="sr-only">Dismiss</span>
-          <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Success Message -->
-    <div v-if="successMessage" class="bg-green-50 border-l-4 border-green-400 text-green-700 p-4 mb-6 rounded-md shadow-sm" role="alert">
-      <div class="flex">
-        <div class="py-1"><svg class="fill-current h-6 w-6 text-green-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" fill-rule="evenodd"/></svg></div>
-        <div>
-          <p class="font-bold">成功!</p>
-          <p class="text-sm">{{ successMessage }}</p>
+        <div class="mt-4 flex md:mt-0 md:ml-4">
+          <button @click="openAddModal" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-slate-50 transition-all duration-150">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            添加新菜品
+          </button>
         </div>
-         <button @click="successMessage = ''" class="ml-auto -mx-1.5 -my-1.5 bg-green-50 text-green-500 rounded-lg focus:ring-2 focus:ring-green-400 p-1.5 hover:bg-green-100 inline-flex h-8 w-8" aria-label="Close">
-          <span class="sr-only">Dismiss</span>
-          <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
       </div>
-    </div>
 
-    <!-- Dishes Table -->
-    <div v-if="!isLoading || dishes.length > 0" class="bg-white shadow-md rounded-lg overflow-hidden">
-      <table class="min-w-full divide-y divide-slate-200">
-        <thead class="bg-slate-50">
-          <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">图片</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">名称</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">分类</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">食堂</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">价格</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">口味</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">状态</th>
-            <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">操作</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-slate-200">
-          <tr v-for="dish in dishes" :key="dish.id" class="hover:bg-slate-50 transition-colors duration-150">
-            <td class="px-4 py-3 whitespace-nowrap">
-              <img :src="getImageUrl(dish.image_url)" :alt="dish.name" class="h-12 w-12 rounded-md object-cover shadow-sm" v-if="dish.image_url"/>
-              <span v-else class="text-xs text-slate-400 italic">无图</span>
-            </td>
-            <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-900">{{ dish.name }}</td>
-            <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">{{ getCategoryName(dish.category_id) }}</td>
-            <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">{{ dish.canteen_name || 'N/A' }}</td>
-            <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">¥{{ dish.price.toFixed(2) }}</td>
-            <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">
-              <div v-if="dish.flavors && dish.flavors.length > 0" class="flex flex-wrap gap-1.5">
-                <span v-for="flavor in dish.flavors" :key="flavor" class="px-2 py-0.5 text-xs bg-slate-200 text-slate-700 rounded-full">{{ flavor }}</span>
-              </div>
-              <span v-else class="text-xs text-slate-400 italic">无</span>
-            </td>
-            <td class="px-4 py-3 whitespace-nowrap">
-              <span :class="dish.is_available ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'" class="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full">
-                {{ dish.is_available ? '在售' : '停售' }}
-              </span>
-            </td>
-            <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
-              <button @click="openEditModal(dish)" class="text-indigo-600 hover:text-indigo-800 transition-colors duration-150 p-1 rounded-md inline-flex items-center" title="编辑">
-                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M17.414 2.586a2 2 0 00-2.828 0L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>编辑
-              </button>
-              <button @click="toggleAvailability(dish)" :class="dish.is_available ? 'text-amber-600 hover:text-amber-800' : 'text-green-600 hover:text-green-800'" class="transition-colors duration-150 p-1 rounded-md inline-flex items-center" :title="dish.is_available ? '停售' : '上架'">
-                <svg v-if="dish.is_available" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
-                </svg>
-                <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" />
-                </svg>
-                {{ dish.is_available ? '停售' : '上架' }}
-              </button>
-              <button @click="confirmDeleteDish(dish.id)" class="text-red-600 hover:text-red-800 transition-colors duration-150 p-1 rounded-md inline-flex items-center" title="删除">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>删除
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div v-if="!isLoading && dishes.length === 0" class="text-center py-12">
-      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-      </svg>
-      <p class="mt-3 text-xl font-medium text-slate-500">暂无菜品信息</p>
-      <p class="mt-1 text-sm text-slate-400">您可以点击"添加新菜品"按钮来创建您的第一个菜品。</p>
+      <!-- Messages -->
+      <div class="space-y-4 mb-6">
+        <!-- Loading Indicator -->
+        <div v-if="isLoading && !dishes.length" class="flex justify-center items-center py-10 bg-white rounded-lg shadow-sm">
+          <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p class="ml-3 text-lg font-medium text-slate-600">加载菜品数据中...</p>
+        </div>
+
+        <!-- Error Message -->
+        <div v-if="errorMessage" class="bg-red-100 border-l-4 border-red-500 text-red-800 p-4 rounded-r-md shadow" role="alert">
+          <div class="flex">
+            <div class="py-1"><svg class="fill-current h-6 w-6 text-red-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-5.03V7.97a1 1 0 012 0v5.06a1 1 0 11-2 0zm0 3a1 1 0 112 0 1 1 0 01-2 0z" clip-rule="evenodd" fill-rule="evenodd"/></svg></div>
+            <div>
+              <p class="font-bold">操作失败</p>
+              <p class="text-sm">{{ errorMessage }}</p>
+            </div>
+            <button @click="errorMessage = ''" class="ml-auto -mx-1.5 -my-1.5 bg-transparent text-red-600 rounded-lg focus:ring-2 focus:ring-red-400 p-1.5 hover:bg-red-200 inline-flex h-8 w-8 transition-colors" aria-label="Close">
+              <span class="sr-only">Dismiss</span>
+              <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Success Message -->
+        <div v-if="successMessage" class="bg-green-100 border-l-4 border-green-500 text-green-800 p-4 rounded-r-md shadow" role="alert">
+          <div class="flex">
+            <div class="py-1"><svg class="fill-current h-6 w-6 text-green-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" fill-rule="evenodd"/></svg></div>
+            <div>
+              <p class="font-bold">操作成功</p>
+              <p class="text-sm">{{ successMessage }}</p>
+            </div>
+            <button @click="successMessage = ''" class="ml-auto -mx-1.5 -my-1.5 bg-transparent text-green-600 rounded-lg focus:ring-2 focus:ring-green-400 p-1.5 hover:bg-green-200 inline-flex h-8 w-8 transition-colors" aria-label="Close">
+              <span class="sr-only">Dismiss</span>
+              <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content Area -->
+      <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+        <!-- Dishes Table -->
+        <div v-if="!isLoading || dishes.length > 0" class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-100">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">图片</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">名称</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">分类</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">价格</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">口味</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">状态</th>
+                <th class="px-6 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">操作</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-200">
+              <tr v-for="dish in dishes" :key="dish.id" class="hover:bg-slate-50 transition-colors duration-150">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <img :src="getImageUrl(dish.image_url)" :alt="dish.name" class="h-12 w-12 rounded-md object-cover shadow-sm" v-if="dish.image_url"/>
+                  <div v-else class="h-12 w-12 rounded-md bg-slate-100 flex items-center justify-center">
+                    <svg class="h-6 w-6 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                    </svg>
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{{ dish.name }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{{ getCategoryName(dish.category_id) }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600">¥{{ dish.price.toFixed(2) }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 max-w-xs truncate">
+                  <div v-if="dish.flavors && dish.flavors.length > 0" class="flex flex-wrap gap-1.5">
+                    <span v-for="flavor in dish.flavors" :key="flavor" class="px-2 py-0.5 text-xs bg-slate-200 text-slate-700 rounded-full">{{ flavor }}</span>
+                  </div>
+                  <span v-else class="text-xs text-slate-400 italic">无</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span :class="dish.is_available ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'" class="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full">
+                    {{ dish.is_available ? '在售' : '停售' }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
+                  <button @click="openEditModal(dish)" class="font-medium text-indigo-600 hover:text-indigo-800 transition-colors duration-150">编辑</button>
+                  <button @click="openToggleConfirm(dish)" :class="dish.is_available ? 'font-medium text-amber-600 hover:text-amber-800' : 'font-medium text-green-600 hover:text-green-800'" class="transition-colors duration-150">
+                    {{ dish.is_available ? '停售' : '上架' }}
+                  </button>
+                  <button @click="openDeleteConfirm(dish)" class="font-medium text-red-600 hover:text-red-800 transition-colors duration-150">删除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-if="!isLoading && dishes.length === 0" class="text-center py-16 px-6">
+          <svg class="mx-auto h-16 w-16 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+          </svg>
+          <p class="mt-4 text-xl font-semibold text-slate-600">暂无菜品信息</p>
+          <p class="mt-2 text-sm text-slate-500">点击下方按钮，开始创建您的第一个菜品吧！</p>
+        </div>
+      </div>
     </div>
 
     <!-- Add/Edit Dish Modal -->
-    <div v-if="showModal" class="fixed z-20 inset-0 overflow-y-auto">
+    <div v-if="showModal" class="fixed z-20 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
       <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal"></div>
         <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
         <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
           <form @submit.prevent="handleSubmit">
@@ -188,7 +190,7 @@
               </div>
             </div>
             <div class="bg-slate-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-              <button type="submit" :disabled="isSubmitting" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+              <button type="submit" :disabled="isSubmitting" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                 {{ isSubmitting ? '处理中...' : (isEditing ? '保存更改' : '创建菜品') }}
               </button>
               <button @click="closeModal" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm">
@@ -196,6 +198,46 @@
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Confirmation Modals -->
+    <div v-if="showToggleConfirmModal || showDeleteConfirmModal" class="fixed z-30 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+      <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="closeConfirmModals"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div class="sm:flex sm:items-start">
+              <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full sm:mx-0 sm:h-10 sm:w-10" :class="showDeleteConfirmModal ? 'bg-red-100' : 'bg-yellow-100'">
+                <svg class="h-6 w-6" :class="showDeleteConfirmModal ? 'text-red-600' : 'text-yellow-600'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                  {{ showDeleteConfirmModal ? '确认删除' : '确认操作' }}
+                </h3>
+                <div class="mt-2">
+                  <p v-if="dishToModify" class="text-sm text-gray-500">
+                    <span v-if="showDeleteConfirmModal">您确定要永久删除菜品 <strong class="text-slate-800">"{{ dishToModify.name }}"</strong> 吗？此操作无法撤销。</span>
+                    <span v-else>您确定要将菜品 <strong class="text-slate-800">"{{ dishToModify.name }}"</strong> 的状态更改为 <strong :class="dishToModify.is_available ? 'text-amber-600' : 'text-green-600'">{{ dishToModify.is_available ? '停售' : '在售' }}</strong> 吗?</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button @click="handleConfirmAction" type="button" 
+                    :class="showDeleteConfirmModal ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' : (dishToModify && dishToModify.is_available ? 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500' : 'bg-green-600 hover:bg-green-700 focus:ring-green-500')"
+                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm">
+              确认
+            </button>
+            <button @click="closeConfirmModals" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm">
+              取消
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -234,6 +276,11 @@ const currentDish = ref({
 const selectedImageFile = ref(null);
 const imagePreviewUrl = ref(null);
 
+// Confirmation Modals State
+const showToggleConfirmModal = ref(false);
+const showDeleteConfirmModal = ref(false);
+const dishToModify = ref(null);
+
 // 管理端口味输入校验：自动用逗号分割，防止录入"微辣，中辣"变成一个整体
 const flavorsInput = computed({
   get: () => currentDish.value.flavors ? currentDish.value.flavors.join(', ') : '',
@@ -256,13 +303,24 @@ const availableCanteens = computed(() => {
     return allCanteens.value.filter(c => c.is_enabled);
 });
 
-const clearMessages = () => {
-  errorMessage.value = '';
-  successMessage.value = '';
+const clearMessages = (timeout = 0) => {
+  if (timeout > 0) {
+    setTimeout(() => {
+      errorMessage.value = '';
+      successMessage.value = '';
+    }, timeout);
+  } else {
+    errorMessage.value = '';
+    successMessage.value = '';
+  }
 };
 
 const getImageUrl = (imagePath) => {
   if (!imagePath) return '';
+  // Check if imagePath is already a full URL (e.g., from blob preview)
+  if (imagePath.startsWith('http') || imagePath.startsWith('blob:')) {
+    return imagePath;
+  }
   return `${UPLOADS_BASE_URL}${imagePath}`;
 };
 
@@ -279,29 +337,26 @@ const fetchInitialData = async () => {
     if (categoriesRes.data && categoriesRes.data.code === 0) {
       allCategories.value = categoriesRes.data.data;
     } else {
-      errorMessage.value = categoriesRes.data.message || '获取分类失败';
+      throw new Error(categoriesRes.data.message || '获取分类失败');
     }
 
-    // Handle canteens response (might be direct array or {code, data})
     if (canteensRes.data && (canteensRes.data.code === 0 || Array.isArray(canteensRes.data))) {
       allCanteens.value = Array.isArray(canteensRes.data) ? canteensRes.data : canteensRes.data.data;
     } else {
-      errorMessage.value = (canteensRes.data && canteensRes.data.message) || '获取食堂列表失败';
+      throw new Error((canteensRes.data && canteensRes.data.message) || '获取食堂列表失败');
     }
 
     if (dishesRes.data && dishesRes.data.code === 0) {
       dishes.value = dishesRes.data.data.map(dish => ({
         ...dish,
-        // Ensure flavors is an array, even if it's null/undefined or empty string from backend
         flavors: dish.flavors ? (typeof dish.flavors === 'string' ? JSON.parse(dish.flavors) : dish.flavors) : []
       }));
     } else {
-      errorMessage.value = dishesRes.data.message || '获取菜品列表失败';
+      throw new Error(dishesRes.data.message || '获取菜品列表失败');
     }
 
   } catch (error) {
-    console.error('Error fetching initial data for dishes page:', error);
-    errorMessage.value = error.response?.data?.message || error.message || '加载页面数据失败，请检查网络连接并重试。';
+    handleApiError(error, '加载页面数据失败，请检查网络连接并重试。');
   } finally {
     isLoading.value = false;
   }
@@ -331,7 +386,6 @@ const openEditModal = (dish) => {
   isEditing.value = true;
   currentDish.value = { 
     ...dish, 
-    // Ensure flavors are an array for the modal, even if stored as JSON string
     flavors: Array.isArray(dish.flavors) ? dish.flavors : (dish.flavors ? JSON.parse(dish.flavors) : [])
   };
   selectedImageFile.value = null;
@@ -348,12 +402,9 @@ const handleImageUpload = (event) => {
   if (file) {
     selectedImageFile.value = file;
     imagePreviewUrl.value = URL.createObjectURL(file);
-    currentDish.value.image_url = null; // Clear existing image_url if a new file is selected
   } else {
     selectedImageFile.value = null;
     imagePreviewUrl.value = null;
-    // if editing, and user deselects, should we revert to original currentDish.image_url? 
-    // For now, let's assume if they clear it, they want no image or to keep existing if not changed
   }
 };
 
@@ -362,17 +413,24 @@ const handleSubmit = async () => {
   clearMessages();
 
   const formData = new FormData();
-  Object.keys(currentDish.value).forEach(key => {
-    if (key === 'flavors' && Array.isArray(currentDish.value.flavors)) {
-      // Send flavors as a JSON string array
-      formData.append(key, JSON.stringify(currentDish.value.flavors));
-    } else if (currentDish.value[key] !== null) {
-      formData.append(key, currentDish.value[key]);
-    }
-  });
+  // We should not append the whole currentDish object.
+  // Especially if image_url is a full path from the backend
+  formData.append('name', currentDish.value.name);
+  formData.append('price', currentDish.value.price);
+  formData.append('description', currentDish.value.description);
+  formData.append('category_id', currentDish.value.category_id);
+  formData.append('canteen_id', currentDish.value.canteen_id);
+  formData.append('is_available', currentDish.value.is_available);
+  formData.append('flavors', JSON.stringify(currentDish.value.flavors));
+  if (currentDish.value.id) {
+    formData.append('id', currentDish.value.id);
+  }
 
   if (selectedImageFile.value) {
     formData.append('image', selectedImageFile.value);
+  } else if (isEditing.value && currentDish.value.image_url) {
+    // If not uploading new image, but one exists, tell backend
+    formData.append('image_url', currentDish.value.image_url);
   }
 
   try {
@@ -402,7 +460,7 @@ const handleSubmit = async () => {
 const handleApiSuccess = (response, successMsg) => {
   if (response.data && response.data.code === 0) {
     successMessage.value = successMsg;
-    setTimeout(() => { successMessage.value = '' }, 3000);
+    clearMessages(3000);
   } else {
     throw new Error(response.data.message || '操作失败');
   }
@@ -411,11 +469,40 @@ const handleApiSuccess = (response, successMsg) => {
 const handleApiError = (error, defaultMsg) => {
   console.error('API Error:', error);
   errorMessage.value = error.response?.data?.message || error.message || defaultMsg;
-  setTimeout(() => { errorMessage.value = '' }, 5000);
+  clearMessages(5000);
 };
 
-const toggleAvailability = async (dish) => {
+// --- Confirmation Modal Logic ---
+const openToggleConfirm = (dish) => {
+  dishToModify.value = dish;
+  showToggleConfirmModal.value = true;
+};
+
+const openDeleteConfirm = (dish) => {
+  dishToModify.value = dish;
+  showDeleteConfirmModal.value = true;
+};
+
+const closeConfirmModals = () => {
+  showToggleConfirmModal.value = false;
+  showDeleteConfirmModal.value = false;
+  dishToModify.value = null;
+};
+
+const handleConfirmAction = async () => {
+  if (showDeleteConfirmModal.value) {
+    await handleDeleteDish();
+  } else if (showToggleConfirmModal.value) {
+    await handleToggleAvailability();
+  }
+  closeConfirmModals();
+};
+
+const handleToggleAvailability = async () => {
+  if (!dishToModify.value) return;
   clearMessages();
+  
+  const dish = dishToModify.value;
   const originalStatus = dish.is_available;
 
   // Optimistic UI Update
@@ -423,38 +510,30 @@ const toggleAvailability = async (dish) => {
   if (dishIndex !== -1) {
     dishes.value[dishIndex].is_available = !originalStatus;
   }
-
-  const updatedDish = { ...dish, is_available: !originalStatus };
-
+  
   try {
-    const response = await axios.put(`${API_BASE_URL}/dishes/admin/${dish.id}`, updatedDish, {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const response = await axios.put(`${API_BASE_URL}/dishes/admin/${dish.id}`, { is_available: !originalStatus });
     handleApiSuccess(response, `菜品 "${dish.name}" 状态已更新。`);
-    // On success, we can optionally refetch to ensure perfect sync, but optimistic update handles the UI.
-    // await fetchInitialData(); 
   } catch (error) {
-    // Revert UI on error
     if (dishIndex !== -1) {
-      dishes.value[dishIndex].is_available = originalStatus;
+      dishes.value[dishIndex].is_available = originalStatus; // Revert on error
     }
     handleApiError(error, `无法更新菜品 "${dish.name}" 的状态。`);
   }
 };
 
-const confirmDeleteDish = async (dishId) => {
+const handleDeleteDish = async () => {
+  if (!dishToModify.value) return;
   clearMessages();
-  if (window.confirm('确定要删除这个菜品吗？此操作无法撤销。')) {
-    isSubmitting.value = true; // Use isSubmitting to indicate general async operation
-    try {
-      const response = await axios.delete(`${API_BASE_URL}/dishes/admin/${dishId}`);
-      handleApiSuccess(response, '菜品删除成功！');
-      await fetchInitialData(); // Refresh list
-    } catch (error) {
-      handleApiError(error, '删除失败');
-    } finally {
-      isSubmitting.value = false;
-    }
+  isSubmitting.value = true;
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/dishes/admin/${dishToModify.value.id}`);
+    handleApiSuccess(response, '菜品删除成功！');
+    await fetchInitialData(); // Refresh list
+  } catch (error) {
+    handleApiError(error, '删除失败');
+  } finally {
+    isSubmitting.value = false;
   }
 };
 
@@ -462,8 +541,14 @@ const confirmDeleteDish = async (dishId) => {
 
 <style scoped>
 .input-field {
-  @apply mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm placeholder-slate-400;
+  @apply mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm placeholder-slate-400 disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 disabled:shadow-none;
 }
-/* Ensure this class is defined or remove if not used elsewhere */
-/* .btn-primary, .btn-secondary might have been from a global style or previous version. Ensure they are defined or use direct Tailwind classes. */
+input:required:invalid {
+  border-color: #f87171; /* red-400 */
+}
+input:required:invalid:focus {
+    outline: 1px solid #f87171;
+    border-color: #f87171;
+    box-shadow: 0 0 0 1px #f87171;
+}
 </style>
