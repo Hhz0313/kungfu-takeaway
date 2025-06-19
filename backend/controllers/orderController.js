@@ -279,14 +279,46 @@ const updateOrderStatus = async (req, res) => {
   const { order_id } = req.params;
   const { status } = req.body;
   const validStatuses = ['pending', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled', 'refunded'];
+
   if (!validStatuses.includes(status)) {
     return errorResponse(res, 400, '无效的订单状态');
   }
+
+  const trx = await knex.transaction();
+
   try {
-    const updated = await knex('orders').where({ id: order_id }).update({ status, updated_at: new Date().toISOString() });
-    if (updated === 0) return errorResponse(res, 404, '订单未找到');
+    const order = await trx('orders').where({ id: order_id }).first();
+
+    if (!order) {
+      await trx.rollback();
+      return errorResponse(res, 404, '订单未找到');
+    }
+
+    // 如果订单被取消，且已经支付，则退款给用户
+    if (status === 'cancelled' && order.payment_status === 'paid') {
+      const { user_id, total_amount } = order;
+      
+      // 1. 退款到用户余额
+      await trx('users').where({ id: user_id }).increment('balance', total_amount);
+
+      // 2. 更新订单状态和支付状态
+      await trx('orders').where({ id: order_id }).update({
+        status: 'cancelled',
+        payment_status: 'refunded', // 将支付状态也更新为'已退款'
+        updated_at: new Date().toISOString()
+      });
+    } else {
+      // 对于其他状态更新，维持原逻辑
+      await trx('orders').where({ id: order_id }).update({
+        status,
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    await trx.commit();
     successResponse(res, { order_id, status }, '订单状态更新成功');
   } catch (error) {
+    await trx.rollback();
     console.error('更新订单状态失败:', error.message);
     errorResponse(res, 500, '服务器错误: 更新订单状态失败');
   }
